@@ -1,0 +1,15 @@
+{
+  "resolution": 0.05,
+  "width": 400,
+  "height": 400,
+  "origin_x": -3.0,
+  "origin_y": -7.0,
+  "occupied_threshold": 0.65,
+  "free_threshold": 0.35,
+  "robot_radius": 0.2,
+  "map_files": {
+    "occupancy": "map_clean.png",
+    "binary": "map_binary.png",
+    "planning": "map_planning.png"
+  }
+}
