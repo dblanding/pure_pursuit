@@ -10,8 +10,6 @@ import json
 import time
 from threading import Lock
 import sys
-import argparse
-
 sys.path.insert(0, '../raspibot/robot')  # path to where topics.py is
 from topics import Topics
 
@@ -29,32 +27,6 @@ def signal_handler(sig, frame):
 
 # Register signal handler
 signal.signal(signal.SIGINT, signal_handler)
-
-
-def load_path(filename="planned_path.json"):
-    """Load path from JSON file"""
-    try:
-        with open(filename, 'r') as f:
-            data = json.load(f)
-        
-        path = data['path']
-        # Convert to tuples if they're lists
-        path = [tuple(p) for p in path]
-        
-        print(f"📂 Loaded path from {filename}")
-        print(f"   {len(path)} waypoints")
-        print(f"   Start: {path[0]}")
-        print(f"   Goal: {path[-1]}")
-        
-        return path
-    
-    except FileNotFoundError:
-        print(f"❌ File not found: {filename}")
-        return None
-    except Exception as e:
-        print(f"❌ Error loading path: {e}")
-        return None
-
 
 class RobotInterface:
     """Simple MQTT interface for odometry and motor commands"""
@@ -130,10 +102,7 @@ class RobotInterface:
 
 
 class PurePursuitController:
-    """
-    Pure pursuit path following controller
-    SEQUENTIAL VERSION - visits waypoints in order without skipping
-    """
+    """Pure pursuit path following controller"""
     
     def __init__(self, lookahead_distance=0.3, max_linear_vel=0.3, max_angular_vel=1.0):
         """
@@ -155,7 +124,7 @@ class PurePursuitController:
     def find_lookahead_point(self, path, robot_pos):
         """
         Find the lookahead point on the path
-        SEQUENTIAL VERSION - must visit each waypoint in order, no skipping
+        ONLY looks forward - never backward!
         
         Args:
             path: List of (x, y) waypoints
@@ -169,22 +138,32 @@ class PurePursuitController:
         
         rx, ry = robot_pos
         
-        # Check if we've reached the current waypoint
-        if self.current_waypoint_idx < len(path):
+        # Update current waypoint index - advance if we've reached current waypoint
+        while self.current_waypoint_idx < len(path):
             px, py = path[self.current_waypoint_idx]
             dist = np.hypot(px - rx, py - ry)
             
-            # If close enough, advance to next waypoint
+            # If we're close to current waypoint, advance to next
             if dist < self.waypoint_reached_dist:
-                print(f"  ✓ Reached waypoint {self.current_waypoint_idx}: {path[self.current_waypoint_idx]}")
                 self.current_waypoint_idx += 1
+            else:
+                break
         
-        # If we've completed all waypoints, return final goal
+        # If we've passed all waypoints, we're done
         if self.current_waypoint_idx >= len(path):
-            return path[-1]
+            return path[-1]  # Return final goal
         
-        # Always target the current waypoint (no skipping!)
-        return path[self.current_waypoint_idx]
+        # Search FORWARD from current waypoint for lookahead point
+        for i in range(self.current_waypoint_idx, len(path)):
+            px, py = path[i]
+            dist = np.hypot(px - rx, py - ry)
+            
+            # Return first point that's at or beyond lookahead distance
+            if dist >= self.lookahead:
+                return (px, py)
+        
+        # If no point is far enough, return the last point
+        return path[-1]
     
     def compute_velocity(self, robot_pose, target_point):
         """
@@ -266,6 +245,14 @@ def follow_path(robot, path, controller, goal_tolerance=0.1, rate=10):
             # Get current pose
             x, y, theta = robot.get_pose()
             
+            # Check if goal reached
+            dist_to_goal = np.hypot(goal_x - x, goal_y - y)
+            
+            if dist_to_goal < goal_tolerance:
+                print(f"\n✅ Goal reached! Final position: ({x:.3f}, {y:.3f})")
+                robot.stop()
+                return True
+            
             # Find lookahead point
             target = controller.find_lookahead_point(path, (x, y))
             
@@ -274,15 +261,6 @@ def follow_path(robot, path, controller, goal_tolerance=0.1, rate=10):
                 robot.stop()
                 return False
             
-            # Check if ALL waypoints completed AND close to final goal
-            if controller.current_waypoint_idx >= len(path):
-                dist_to_goal = np.hypot(goal_x - x, goal_y - y)
-                
-                if dist_to_goal < goal_tolerance:
-                    print(f"\n✅ Goal reached! Final position: ({x:.3f}, {y:.3f})")
-                    robot.stop()
-                    return True
-            
             # Compute velocities
             linear, angular = controller.compute_velocity((x, y, theta), target)
             
@@ -290,12 +268,11 @@ def follow_path(robot, path, controller, goal_tolerance=0.1, rate=10):
             robot.set_velocity(linear, angular)
             
             # Status update with waypoint progress
-            dist_to_goal = np.hypot(goal_x - x, goal_y - y)
             print(f"Pos: ({x:6.3f}, {y:6.3f}, {np.degrees(theta):6.1f}°) | "
                   f"WP: {controller.current_waypoint_idx}/{len(path)} | "
                   f"Target: ({target[0]:6.3f}, {target[1]:6.3f}) | "
                   f"Goal dist: {dist_to_goal:5.3f}m | "
-                  f"Cmd: v={linear:5.2f} ω={angular:5.2f}", end='\r')
+                  f"Cmd: v={linear:5.2f} ω={angular:5.2f}", end='\n')
             
             time.sleep(dt)
     
@@ -306,45 +283,13 @@ def follow_path(robot, path, controller, goal_tolerance=0.1, rate=10):
 
 
 if __name__ == '__main__':
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Path follower for DIY robot')
-    parser.add_argument('--path-file', default='planned_path.json',
-                        help='Path file to load (default: planned_path.json)')
-    parser.add_argument('--use-test-path', action='store_true',
-                        help='Use test square path instead of loading from file')
-    parser.add_argument('--broker', default='raspibot.local',
-                        help='MQTT broker address (default: raspibot.local)')
-    
-    args = parser.parse_args()
-    
+    # Example usage
     print("=" * 60)
-    print("PATH FOLLOWER - Pure Pursuit Controller (Sequential)")
+    print("PATH FOLLOWER - Pure Pursuit Controller")
     print("=" * 60)
-    
-    # Determine which path to use
-    if args.use_test_path:
-        print("\n🧪 Using test square path")
-        path = [
-            (1.0, 0.0),
-            (1.0, 1.0),
-            (0.2, 1.0),
-            (0.2, 0.0)
-        ]
-    else:
-        # Try to load from file
-        path = load_path(args.path_file)
-        
-        if path is None:
-            print("\n⚠️  No saved path found, using test square path")
-            path = [
-                (1.0, 0.0),
-                (1.0, 1.0),
-                (0.2, 1.0),
-                (0.2, 0.0)
-            ]
     
     # Connect to robot
-    robot = RobotInterface(mqtt_broker=args.broker)
+    robot = RobotInterface(mqtt_broker='raspibot.local')
     robot_instance = robot  # For signal handler
     
     # Create controller
@@ -353,6 +298,18 @@ if __name__ == '__main__':
         max_linear_vel=0.25,      # 25 cm/s max speed
         max_angular_vel=1.0       # 1 rad/s max turn rate
     )
+    
+    # Example path (replace with your planned path)
+    # This is a simple square path for testing
+    path = [
+        (1.0, 0.0),
+        (1.0, 1.0),
+        (0.2, 1.0),
+        (0.2, 0.0)
+    ]
+    
+    print("\n⚠️  EXAMPLE PATH LOADED")
+    print("Replace this with your actual planned path!")
     
     response = input("\nFollow path? (y/n): ")
     

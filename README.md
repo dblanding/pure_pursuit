@@ -1,5 +1,7 @@
 # Pure Pursuit
 
+> This project is one of of a bunch of projects, all related to the [Raspibot](https://github.com/dblanding/raspibot) project. Locally, I keep them co-located under a common parent directory, in order facilitate import access to S.P.O.T. files such as *topics.py* (which contains the names of various MQTT topics). 
+ 
 ## Starts with a decent map
 * I used MS Paint to clean up map.png (from OGmapper) and saved it as map_clean.png
 * Then went through these steps:
@@ -51,19 +53,22 @@
         ┌─────────┴─────────┐
         │                   │
 ┌───────▼────────┐  ┌───────▼────────┐
-│ PathPlanner    │  │ PathFollower   │
-│ ( have this)   │  │ (build this)   │
+│ Path Planner   │  │ Path Follower  │
+│  (on Laptop)   │  │  (on laptop)   │
 └────────────────┘  └───────┬────────┘
                             │
                     ┌───────▼────────┐
-                    │ Odometry       │
-                    │ (encoders+IMU) │
+                    │  Motor Control │
+                    │   (on Robot)   │
                     └────────────────┘
 ```
 * Create files:
     * *path_follower.py* converts waypoints into velocity commands
     * *robot_navigator.py* high-level mission controller
-    * *robot_interface.py* stub for connecting to actual hardware
+    * *motor_control.py* runs (as a service) on Raspberry Pi - sends commands (lin_vel, ang_vel) via serial bus to Pico.
+        * Pico receives commands from 2 sources and must decide between them:
+            1. joystick commands (teleop) - higher priority
+            2. motor_control (autonomous) - when joystick is switched off
 
 ## Pause to consider how this will integrate into my existing robot control system.
 ![My Desktop Control System](imgs/IMG_4860.jpeg)
@@ -71,11 +76,101 @@
     * An onboard mqtt broker that publishes (currently) both lidar scans and pose.
     * I have a ssh connected GUI for monitoring and stopping and starting services
     * A web-based MQTT monitor
-    * A joystick control (connected via BLE) for driving the robot in teleop mode
-    * Robot accepts drive commands with the format: (lin_spd, ang_spd)
-* I would like to have all my path planning and path following programs on my laptop.
-    * *path_follower.py* on laptop publishes motor drive commands on robot/motor/cmd topic
-* I would like to have an mqtt listener on my robot subscribing to motor drive commands.
-    * *motor_control_service.py* on robot subscribes to motor commands and drives the motors.
-* The GUI would have a couple of buttons to start and stop the motor_control service.
+    * 2 ways to drive motors:
+        1. A joystick control (connected via BLE) in teleop mode 
+        2. Robot accepts MQTT drive commands with the format: (lin_spd, ang_spd)
+
+## Using the interactive_planner
+* Initial tests were based on planning paths from the robot's home position to a remote location.
+* When I set up to make a run:
+    1. I place the robot *precisely* in its "Home" pose (the blue dot in my interactive map)
+    2. I start the odometer service, which resets the pose to (0, 0, 0).
+    3. I start the motor_control service.
+    4. I start path_follower with a path that is intended to take take the robot in the X direction.
+* But surprisingly, the robot makes a hard left turn then proceeds straight in an oblique direction.
+
+![Wierd path](imgs/weird-path.png)
+
+* Come to find out the Path planner uses MAP coordinates where (0, 0) is the lower-left corner of the map
+* Whereas my robot is working in ODOMETRY coordinates
+* Those Coordinate systems don't match!
+* What's the best way to reconcile this mismatch which will provide a solid foundation for the future?
+
+## It's time to think through a Clean Robotics Architecture
+* We're going to build a ROS-like architecture, but without ROS
+
+    * What we're borrowing from ROS (the good ideas):
+
+        - ✅ Separation of odometry vs. localization
+        - ✅ Coordinate frame concepts (map vs. odom)
+        - ✅ initialpose message pattern
+        - ✅ Modular programs communicating via MQTT (like ROS nodes via topics)
+
+    * What we're NOT using:
+
+        - ❌ ROS nodes, roslaunch, roscore
+        - ❌ ROS tf2 transform library
+        - ❌ ROS message types (.msg files)
+        - ❌ ROS-specific terminology in your code
+
+* In our new clean architecture, we will have Programs (not "nodes"):
+```
+odometry.py          → Tracks wheel movement (odom frame)
+localization.py      → Figures out position on map (map frame)
+path_planner.py      → Creates paths in map coordinates
+path_follower.py     → Follows paths using localized position
+motor_controller.py  → Low-level motor control
+```
+
+* Whereas ROS uses these 3 coordinate frames:
+    1. Map frame - Global, fixed coordinate system
+        * Origin at map corner or some fixed point
+        * Where landmarks, walls, goals exist
+        * Never changes
+
+    2. Odom frame - Local, continuous coordinate system  
+        * Origin where robot started (or last reset)
+        * Tracks relative motion from encoders/IMU
+        * Drifts over time but smooth
+
+    3. Base_link frame - Robot's body
+        * Origin at robot center
+        * Moves with the robot
+
+* We will refer to them this way (and we won't be using ROS tf):
+    1. Map frame:    Global coordinates (your map_metadata.json defines this)
+    2. Odom frame:   Local coordinates (where odometry starts at 0,0,0)
+    3. Robot frame:  Robot's perspective (forward = +X in robot's view)
+
+* In ROS, Transform is used to translate from one coordinate frame to another, whereas we will use LOCALIZATION
+```
+map → odom → base_link
+    ↑
+    └─ This transform comes from LOCALIZATION
+```
+
+* For Communication between programs:
+    * We will use MQTT topics (not the same as ROS topics, but same idea)
+    * We will use JSON messages (not ROS .msg types)
+
+## Implementing the new architecture:
+
+#### Phase 1 (this week): Simple localization
+```
+# localization.py - Version 1.0 (no particle filter yet)
+# Just transforms odometry to map frame using initial pose
+```
+* This gives you:
+
+    Proper architecture
+    Odometry stays clean (always starts at 0,0,0)
+    Easy to add particle filter later
+    Only ~50 lines of code
+
+#### Phase 2 (later): Add particle filter
+```
+# localization.py - Version 2.0
+# Adds particle filter that uses lidar to correct drift
+```
+
 

@@ -5,9 +5,7 @@ A* path planner for occupancy grid maps
 import numpy as np
 import cv2
 import json
-import time
 import heapq
-import argparse
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional
 
@@ -344,101 +342,26 @@ class PathPlanner:
                 return False
         
         return True
-    
-    def save_path(self, path, filename='planned_path.json'):
-        """
-        Save planned path to JSON file
-        
-        Args:
-            path: List of (x, y) waypoints
-            filename: Output JSON file
-        """
-        if path is None:
-            print(f"❌ Cannot save None path")
-            return False
-        
-        data = {
-            'path': path,
-            'num_waypoints': len(path),
-            'start': path[0],
-            'goal': path[-1],
-            'total_distance': self._path_distance(path),
-            'timestamp': time.time()
-        }
-        
-        try:
-            with open(filename, 'w') as f:
-                json.dump(data, f, indent=2)
-            print(f"✅ Saved path to {filename}")
-            return True
-        except Exception as e:
-            print(f"❌ Error saving path: {e}")
-            return False
-
 
 def main():
-    """Command-line interface for path planner"""
-    parser = argparse.ArgumentParser(description='A* path planner for occupancy grid maps')
-    parser.add_argument('--start', nargs=2, type=float, default=[0.0, 0.0],
-                        help='Start position (x y) in meters (default: 0.0 0.0)')
-    parser.add_argument('--goal', nargs=2, type=float, default=[5.0, 5.0],
-                        help='Goal position (x y) in meters (default: 5.0 5.0)')
-    parser.add_argument('--output', default='planned_path.json',
-                        help='Output path file (default: planned_path.json)')
-    parser.add_argument('--map', default='map_planning.png',
-                        help='Planning map file (default: map_planning.png)')
-    parser.add_argument('--metadata', default='map_metadata.json',
-                        help='Map metadata file (default: map_metadata.json)')
-    parser.add_argument('--viz', default='path_visualization.png',
-                        help='Visualization output file (default: path_visualization.png)')
+    """Test path planner"""
+    planner = PathPlanner()
     
-    args = parser.parse_args()
-    
-    print("=" * 60)
-    print("A* PATH PLANNER")
-    print("=" * 60)
-    
-    # Create planner
-    try:
-        planner = PathPlanner(map_file=args.map, metadata_file=args.metadata)
-    except FileNotFoundError as e:
-        print(f"❌ {e}")
-        return
-    
-    # Plan path
-    start_x, start_y = args.start
-    goal_x, goal_y = args.goal
+    # Example: Plan path from one room to another
+    # Adjust these coordinates based on your map!
+    start_x, start_y = 0.0, 0.0    # Start position
+    goal_x, goal_y = 5.0, 5.0      # Goal position
     
     path = planner.plan(start_x, start_y, goal_x, goal_y)
     
     if path:
-        print(f"\n📍 Waypoints (showing sample):")
-        step = max(1, len(path) // 10)  # Print ~10 waypoints
-        for i in range(0, len(path), step):
-            x, y = path[i]
-            print(f"   {i:3d}: ({x:6.2f}, {y:6.2f})")
+        print(f"\n📍 Waypoints:")
+        for i, (x, y) in enumerate(path[::10]):  # Print every 10th waypoint
+            print(f"   {i*10}: ({x:.2f}, {y:.2f})")
         
-        # Always show last waypoint
-        if (len(path) - 1) % step != 0:
-            x, y = path[-1]
-            print(f"   {len(path)-1:3d}: ({x:6.2f}, {y:6.2f})")
-        
-        # Save path
-        planner.save_path(path, args.output)
-        
-        # Visualize
-        planner.visualize_path(path, args.viz)
-        
-        print(f"\n✅ Path planning complete!")
-        print(f"   Waypoints: {len(path)}")
-        print(f"   Distance: {planner._path_distance(path):.2f}m")
-        print(f"   Path file: {args.output}")
-        print(f"   Visualization: {args.viz}")
-        print(f"\n💡 Next step: Run path follower")
-        print(f"   python3 path_follower.py --path-file {args.output}")
+        planner.visualize_path(path)
     else:
-        print("\n❌ Path planning failed!")
-        print("   Check that start and goal positions are valid and reachable")
+        print("❌ Path planning failed!")
 
 
 if __name__ == '__main__':
