@@ -12,18 +12,39 @@
  
 | Topic Name | Constant | Description | Message Format | Publisher | Subscriber(s) |
 |------------|----------|-------------|----------------|-----------|---------------|
-| `robot/odometry/raw` | `ODOM_RAW` | Raw odometry from OTOS (odom frame) | `{"x": 0.0, "y": 0.0, "theta": 0.0, "t": 12345.67, "xr": 0.0, "yr": 0.0, "hr": 0.0}` | odometry.py | localization.py |
-| `robot/pose` | `POSE` | Localized pose (map frame) | `{"x": 0.70, "y": 3.25, "theta": 0.0, "xr": 0.0, "yr": 0.0, "hr": 0.0}` | localization.py | path_follower.py |
+| `robot/odometry/pose` | `ODOM_POSE` | Raw odometry from OTOS (odom frame) | `{"x": 0.0, "y": 0.0, "h": 0.0, "t": 12345.67, "xr": 0.0, "yr": 0.0, "hr": 0.0}` | odometry.py | localization.py, [other subscribers] |
+| `robot/pose` | `POSE` | Localized pose (map frame) | `{"map_x": 0.70, "map_y": 3.25, "map_h": 0.0, "xr": 0.0, "yr": 0.0, "hr": 0.0}` | localization.py | path_follower.py |
 | `robot/initialpose` | `INITIAL_POSE` | Set initial pose | `{"x": 0.70, "y": 3.25, "theta": 0.0}` | User/GUI | localization.py |
-| `robot/cmd_vel` | `CMD_VEL` | Velocity commands | `{"linear": 0.2, "angular": 0.5}` | path_follower.py | motor_controller.py |
-| `robot/lidar/scan` | `LIDAR_SCAN` | Lidar scan data | `[{"a": -3.14, "d": 0.5, "t": 12345}, ...]` | lidar_node.py | localization.py (future) |
-
-**Message format notes:**
-- `x`, `y`, `theta`: Position/orientation
+| `robot/motor/cmd` | `CMD_VEL` | Velocity commands | `{"linear": 0.2, "angular": 0.5}` | path_follower.py | motor_controller.py |
+| `robot/sensor/lidar/scan` | `LIDAR_SCAN` | Lidar scan data | `[{"a": -3.14, "d": 0.5, "t": 12345}, ...]` | lidar_node.py | localization.py (future) |
+ 
+**Notes:**
+- `ODOM_POSE`: Raw sensor data in odom frame (always starts at 0,0,0)
+- `POSE`: Transformed to map frame by localization
+- Other programs can still subscribe to `ODOM_POSE` for raw odometry
+- Path follower uses `POSE` for map-frame localized position- `x`, `y`, `theta`: Position/orientation
 - `t`: Timestamp
 - `xr`, `yr`, `hr`: Velocity rates from OTOS IMU (linear_x, linear_y, angular)
 ---
- 
+
+## MQTT Connection Pattern
+
+**All programs use:** `from mqtt_utils import connect_mqtt_client`
+
+**Automatic broker detection:**
+- On raspibot: connects to `localhost:1883`
+- On laptop: connects to `raspibot.local:1883`
+
+**Example:**
+```python
+from mqtt_utils import connect_mqtt_client
+
+client = mqtt.Client()
+broker = connect_mqtt_client(client, on_connect=self.on_connect, on_message=self.on_message)
+client.loop_start()
+print(f"Connected to: {broker}")
+```
+
 ## Coordinate Systems
  
 ### **Map Frame** (Global)
@@ -75,7 +96,7 @@ print(f"\r✅ Pose updated: ({x:.2f}, {y:.2f})", end='')
 - `test_x_path.json` - Test path (straight line in +X)
  
 ### **Programs**
-- `motor_controller.py` - Low-level motor control, serial to Pico
+- `motor_control.py` - Low-level motor control, serial to Pico
 - `odometry.py` - Reads OTOS sensor (optical tracking + IMU)
 - `localization.py` - Transforms odom to map frame (Phase 1: simple, Phase 2: particle filter)
 - `path_planner.py` - A* path planning
@@ -208,14 +229,14 @@ print(f"\r✅ Pose updated: ({x:.2f}, {y:.2f})", end='')
 ### **Test 1: Motor Direction**
 ```bash
 # Verify forward = +X direction
-mosquitto_pub -h localhost -t 'robot/cmd_vel' -m '{"linear": 0.2, "angular": 0.0}'
+mosquitto_pub -h localhost -t 'robot/motor/cmd' -m '{"linear": 0.2, "angular": 0.0}'
 # Robot should move forward in +X direction
 ```
 
 ### Test 2: Odometry
 ```bash
 # Monitor odometry while manually moving robot
-mosquitto_sub -h localhost -t 'robot/odometry/raw' -v
+mosquitto_sub -h localhost -t 'robot/pose' -v
 # Should start at (0, 0, 0) and update smoothly
 ```
 
@@ -266,10 +287,10 @@ mosquitto_sub -h localhost -t 'robot/#' -v
 mosquitto_sub -h localhost -t 'robot/pose' -v
 
 # Manual velocity command
-mosquitto_pub -h localhost -t 'robot/cmd_vel' -m '{"linear": 0.1, "angular": 0.0}'
+mosquitto_pub -h localhost -t 'robot/motor/cmd' -m '{"linear": 0.1, "angular": 0.0}'
 
 # Emergency stop
-mosquitto_pub -h localhost -t 'robot/cmd_vel' -m '{"linear": 0.0, "angular": 0.0}'
+mosquitto_pub -h localhost -t 'robot/motor/cmd' -m '{"linear": 0.0, "angular": 0.0}'
 
 # Set initial pose to home
 mosquitto_pub -h localhost -t 'robot/initialpose' -m '{"x": 0.70, "y": 3.25, "theta": 0.0}'

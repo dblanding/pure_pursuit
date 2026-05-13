@@ -90,7 +90,7 @@ class RobotInterface:
     
     def _on_connect(self, client, userdata, flags, rc):
         if rc == 0:
-            client.subscribe(Topics.ODOM_POSE)
+            client.subscribe(Topics.POSE)
     
     def _on_message(self, client, userdata, msg):
         try:
@@ -295,7 +295,7 @@ def follow_path(robot, path, controller, goal_tolerance=0.1, rate=10):
                   f"WP: {controller.current_waypoint_idx}/{len(path)} | "
                   f"Target: ({target[0]:6.3f}, {target[1]:6.3f}) | "
                   f"Goal dist: {dist_to_goal:5.3f}m | "
-                  f"Cmd: v={linear:5.2f} ω={angular:5.2f}", end='\r')
+                  f"Cmd: v={linear:5.2f} ω={angular:5.2f}", end='\n')
             
             time.sleep(dt)
     

@@ -49,7 +49,7 @@ class MotorControl:
         print(f"🤖 Motor Control Service Ready")
         print(f"{'='*60}")
         print(f"Subscribed to:")
-        print(f"  - {Topipcs.MOTOR_CMD} (velocity commands)")
+        print(f"  - {Topics.MOTOR_CMD} (velocity commands)")
         #print(f"  - robot/motor/service/control (start/stop)")
         #print(f"\nService state: STOPPED (waiting for START command)")
         print(f"{'='*60}\n")
