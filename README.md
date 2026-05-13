@@ -172,5 +172,21 @@ map → odom → base_link
 # localization.py - Version 2.0
 # Adds particle filter that uses lidar to correct drift
 ```
+## Fixing some broken path planning programs
+* The first hurdle was to discover and fix a problem with the latest version of interactive_planner.py (interactive_planner2.py).
+    * It didn't record user poinht selection, nor did it display a path. So I checked earlier versions.
+    * The first version (interactive_planner0.py) worked to allow the user to pick a start and end point, and would display the path found, but wouldn't save the path to file.
+    * The 2nd version (interactive_planner1.py) fixed this problem and was fully functional.
+* The 2nd hurdle was that the stored path was wrong. The Y values found by the path_planner were wrong. They increased from top to bottom of the image. The cause was failure to invert the Y values when converting from map coordinates to world and vice-versa. Once this was discovered and fixed, it became possible to use the full workflow from path planning to robot driving.
 
+## Workflow with the new Architecture
+0. With the robot powered up and parked in its Home position:
+1. Start the odometer service on the robot
+2. Start the motor_control.py program on the robot. (It is not currently set up as a service.)
+3. ON the laptop, `uv run localization.py`
+4. Set the initial pose by running this in a terminal: `mosquitto_pub -h raspibot.local -t 'robot/initialpose' -m '{"x": 0.7, "y": 2.6, "h": 0.0}'`
+5. On the laptop, `uv run path_follower.py --path-file planned_path.json`
 
+Reaching this goal was an excellent achivement, but as I stated in the beginning, this all starts with having a decent map, and this is where it became clear to me that the map I have been using is about 2/3 of its proper scale. Watching the robot execute a path looked a bit like watching someone with extra-large hands put on a pair of extra small-gloves.
+
+So we're going to cap this off right here and I am going to revisit the task of making a **decent map**.

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """
 Interactive path planning - click to set start/goal
+revised: added mouse_callback method to notify invalid clicks but
+broke the program. No colored dots & doesn't save to path file.
 """
 import cv2
 import numpy as np

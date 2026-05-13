@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Interactive path planning - click to set start/goal
-Shows path but doesn't save waypoints.
+revised to save waypoints to planned_path.json
 """
 import cv2
 import numpy as np
@@ -12,6 +12,7 @@ class InteractivePlanner:
         self.planner = PathPlanner()
         self.start = None
         self.goal = None
+        self.current_path = None  # Store the last planned path
         
         # Load planning map for visualization
         self.map_img = cv2.imread('map_planning.png', cv2.IMREAD_GRAYSCALE)
@@ -75,6 +76,7 @@ class InteractivePlanner:
             print(f"\n🔄 Resetting - click new start position")
             self.start = (y, x)
             self.goal = None
+            self.current_path = None
             print(f"✅ Start set: grid({y}, {x}) = world({world_x:.2f}, {world_y:.2f})")
         
         self.update_display()
@@ -92,6 +94,8 @@ class InteractivePlanner:
         path = self.planner.plan(start_x, start_y, goal_x, goal_y)
         
         if path:
+            self.current_path = path  # Store for saving
+            
             # Draw path on display
             for i in range(len(path) - 1):
                 x1, y1 = path[i]
@@ -108,13 +112,47 @@ class InteractivePlanner:
             
             cv2.imshow('Path Planner - Click Start (blue) then Goal (red)', self.display)
             
-            # Save result
+            # Save visualization
             cv2.imwrite('path_result.png', self.display)
             print(f"✅ Saved path_result.png")
-            print(f"\n💡 Click anywhere to plan another path")
+            
+            # Save path JSON for path follower
+            self.planner.save_path(path, 'planned_path.json')
+            
+            print(f"\n💡 Options:")
+            print(f"   • Click anywhere to plan another path")
+            print(f"   • Press 'S' to save path again")
+            print(f"   • Press 'F' to follow this path (runs path_follower.py)")
+            print(f"   • Press ESC/Q to quit")
         else:
+            self.current_path = None
             print(f"❌ No path found!")
             print(f"💡 Click to try different start/goal")
+    
+    def save_current_path(self):
+        """Save current path to JSON"""
+        if self.current_path:
+            filename = input("\nEnter filename (default: planned_path.json): ").strip()
+            if not filename:
+                filename = 'planned_path.json'
+            self.planner.save_path(self.current_path, filename)
+        else:
+            print("❌ No path to save! Plan a path first.")
+    
+    def follow_current_path(self):
+        """Launch path follower with current path"""
+        if self.current_path:
+            print("\n🚀 Launching path follower...")
+            print("   (Close this window or it will continue running)")
+            import subprocess
+            try:
+                subprocess.Popen(['python3', 'path_follower.py', '--path-file', 'planned_path.json'])
+                print("✅ Path follower started!")
+            except Exception as e:
+                print(f"❌ Could not start path follower: {e}")
+                print("💡 Run manually: python3 path_follower.py")
+        else:
+            print("❌ No path to follow! Plan a path first.")
     
     def run(self):
         """Run interactive planner"""
@@ -125,6 +163,8 @@ class InteractivePlanner:
         print("🎯 Click on GREEN area to set GOAL (red circle)")
         print("🚀 Path will be calculated automatically")
         print("🔄 Click again to plan a new path")
+        print("💾 Press 'S' to save path with custom filename")
+        print("🤖 Press 'F' to follow path (launch path_follower.py)")
         print("❌ Press ESC or Q to quit")
         print("=" * 60)
         
@@ -135,8 +175,13 @@ class InteractivePlanner:
         
         while True:
             key = cv2.waitKey(1) & 0xFF
+            
             if key == 27 or key == ord('q'):  # ESC or Q
                 break
+            elif key == ord('s') or key == ord('S'):  # Save
+                self.save_current_path()
+            elif key == ord('f') or key == ord('F'):  # Follow
+                self.follow_current_path()
         
         cv2.destroyAllWindows()
         print("\n👋 Goodbye!")

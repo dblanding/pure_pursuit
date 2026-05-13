@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 A* path planner for occupancy grid maps
+Revised world_to_grid and grid_to_world methods to FLIP the Y axis
 """
 import numpy as np
 import cv2
@@ -52,15 +53,17 @@ class PathPlanner:
     def world_to_grid(self, x, y):
         """Convert world coordinates (meters) to grid coordinates (cells)"""
         col = int((x - self.origin_x) / self.resolution)
-        row = int((y - self.origin_y) / self.resolution)
+        # FLIP Y: high y values should map to LOW row numbers (top of image)
+        row = self.map.shape[0] - 1 - int((y - self.origin_y) / self.resolution)
         return row, col
-    
+
     def grid_to_world(self, row, col):
         """Convert grid coordinates (cells) to world coordinates (meters)"""
         x = col * self.resolution + self.origin_x
-        y = row * self.resolution + self.origin_y
+        # FLIP Y: row 0 (top of image) should be HIGH y value
+        y = (self.map.shape[0] - 1 - row) * self.resolution + self.origin_y
         return x, y
-    
+
     def is_valid(self, row, col):
         """Check if grid cell is valid and free"""
         if row < 0 or row >= self.grid.shape[0]:
