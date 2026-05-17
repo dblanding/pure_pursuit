@@ -229,35 +229,43 @@ print(f"\r✅ Pose updated: ({x:.2f}, {y:.2f})", end='')
 ### **Test 1: Motor Direction**
 ```bash
 # Verify forward = +X direction
-mosquitto_pub -h localhost -t 'robot/motor/cmd' -m '{"linear": 0.2, "angular": 0.0}'
-# Robot should move forward in +X direction
+# with motor_control.py running on raspibot
+mosquitto_pub -h raspibot.local -t 'robot/motor/cmd' -m '{"linear": 0.2, "angular": 0.0}'
+# Robot should move forward (briefly) in +X direction
 ```
 
 ### Test 2: Odometry
 ```bash
-# Monitor odometry while manually moving robot
-mosquitto_sub -h localhost -t 'robot/pose' -v
+# Monitor odometry while manually moving (teleoperating) robot
+# if localization.py is running:
+mosquitto_sub -h raspibot.local -t 'robot/pose' -v
+# if not:
+mosquitto_sub -h raspibot.local -t 'robot/odometry/pose' -v
 # Should start at (0, 0, 0) and update smoothly
 ```
 
 ### Test 3: Localization
 ```bash
 # Set initial pose and verify transform
-mosquitto_pub -h localhost -t 'robot/initialpose' -m '{"x": 0.70, "y": 3.25, "theta": 0.0}'
-mosquitto_sub -h localhost -t 'robot/pose' -v
+uv run localization.py
+mosquitto_pub -h raspibot.local -t 'robot/initialpose' -m '{"x": 0.70, "y": 3.25, "theta": 0.0}'
+mosquitto_sub -h raspibot.local -t 'robot/pose' -v
 # Should show pose in map frame
 ```
 
 ### Test 4: Path Following
 ```bash
 # Simple straight-line test
-uv run path_follower.py --path-file test_x_path.json
+# with motor_control.py running on raspibot
+uv run localization.py  # start localization
+mosquitto_pub -h raspibot.local -t 'robot/initialpose' -m '{"x": 0.0, "y": 0.0, "theta": 0.0}'  # set initial pose
+uv run path_follower.py --path-file test_x_path.json  # follow prompt to start, ctrl+c to stop
 # Robot should follow path without initial turn
 ```
 
 ---
 
-## Startup Sequence
+## Typical Workflow (Startup Sequence)
 Normal Operation (from home position)
 ```bash
 # 1. Start core services
