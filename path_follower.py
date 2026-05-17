@@ -90,7 +90,7 @@ class RobotInterface:
     
     def _on_connect(self, client, userdata, flags, rc):
         if rc == 0:
-            client.subscribe(Topics.POSE)
+            client.subscribe(Topics.ODOM_POSE)
     
     def _on_message(self, client, userdata, msg):
         try:

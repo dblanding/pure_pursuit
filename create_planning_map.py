@@ -6,9 +6,9 @@ WITH PROPER OBSTACLE INFLATION
 import numpy as np
 import cv2
 
-def create_planning_map(input_file='map_clean.png', 
-                       robot_radius_meters=0.20,
-                       safety_margin_meters=0.10,
+def create_planning_map(input_file='map_clean_300x300.png', 
+                       robot_radius_meters=0.10,
+                       safety_margin_meters=0.05,
                        resolution=0.05):
     """
     Create binary planning map with inflated obstacles

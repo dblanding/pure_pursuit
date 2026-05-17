@@ -10,7 +10,7 @@ HEIGHT = 300
 ORIGINAL_SIZE = f"{WIDTH}x{HEIGHT}"
 
 # Load oversized cleaned map
-cleaned = cv2.imread('map_clean.png', cv2.IMREAD_GRAYSCALE)
+cleaned = cv2.imread('map_clean_600x600.png', cv2.IMREAD_GRAYSCALE)
 print(f"❌ Current size: {cleaned.shape} (TOO BIG!)")
 
 # Resize to ORIGINAL_SIZE
