@@ -64,6 +64,7 @@ class RobotInterface:
         self.x = 0.0
         self.y = 0.0
         self.theta = 0.0
+        self.omega = 0.0
         self.pose_lock = Lock()
         self.pose_updated = False
         
@@ -99,14 +100,15 @@ class RobotInterface:
                 self.x = float(data['x'])
                 self.y = float(data['y'])
                 self.theta = float(data['h'])
+                self.omega = float(data['hr'])
                 self.pose_updated = True
         except:
             pass
     
     def get_pose(self):
-        """Get current robot pose (x, y, theta)"""
+        """Get current robot pose (x, y, theta, omega)"""
         with self.pose_lock:
-            return (self.x, self.y, self.theta)
+            return (self.x, self.y, self.theta, self.omega)
     
     def set_velocity(self, linear, angular):
         """Publish velocity command to robot"""
@@ -188,40 +190,47 @@ class PurePursuitController:
     
     def compute_velocity(self, robot_pose, target_point):
         """
-        Compute velocity commands to reach target point
+        Compute velocity commands using proportional control + derivative damping
         
         Args:
-            robot_pose: (x, y, theta) current pose
-            target_point: (x, y) target point
-            
+            robot_pose: (x, y, theta, omega) - includes angular velocity omega
+            target_point: (tx, ty)
+        
         Returns:
-            (linear_vel, angular_vel) tuple
+            (linear_vel, angular_vel)
         """
-        rx, ry, rtheta = robot_pose
+        # Unpack pose (assuming you're passing all 7 values)
+        rx, ry, rtheta, romega= robot.get_pose()
+        current_angular_vel = romega
+        
         tx, ty = target_point
         
-        # Vector to target
+        # Distance to target
         dx = tx - rx
         dy = ty - ry
         distance = np.hypot(dx, dy)
         
-        # Angle to target
+        # Angle to target (relative to robot heading)
         target_angle = np.arctan2(dy, dx)
-        
-        # Angle error (wrapped to [-pi, pi])
         angle_error = target_angle - rtheta
+        
+        # Normalize angle to [-pi, pi]
         angle_error = np.arctan2(np.sin(angle_error), np.cos(angle_error))
         
-        # Compute velocities
-        # Linear velocity: slow down as we approach target
-        linear_vel = self.max_linear * min(1.0, distance / self.lookahead)
+        # Linear velocity: scale with distance
+        if distance > self.lookahead:
+            linear_vel = self.max_linear
+        else:
+            linear_vel = self.max_linear * (distance / self.lookahead)
         
-        # Reduce linear velocity if we need to turn sharply
-        linear_vel *= (1.0 - abs(angle_error) / np.pi)
+        # Angular velocity: Proportional control + Derivative damping
+        K_P = 2.0       # Proportional gain (tune this)
+        D_GAIN = 0.5    # Derivative gain (tune this)
         
-        # Angular velocity: proportional to angle error
-        k_angular = 2.0  # Gain for angular control
-        angular_vel = k_angular * angle_error
+        proportional_term = K_P * angle_error
+        derivative_term = -current_angular_vel * D_GAIN
+        
+        angular_vel = proportional_term + derivative_term
         
         # Clamp velocities
         linear_vel = np.clip(linear_vel, 0.0, self.max_linear)
@@ -264,7 +273,7 @@ def follow_path(robot, path, controller, goal_tolerance=0.1, rate=10):
     try:
         while True:
             # Get current pose
-            x, y, theta = robot.get_pose()
+            x, y, theta, omega = robot.get_pose()
             
             # Find lookahead point
             target = controller.find_lookahead_point(path, (x, y))
