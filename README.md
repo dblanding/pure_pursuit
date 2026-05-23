@@ -104,7 +104,7 @@
             2. motor_control (autonomous) - when joystick is switched off
 
 ## Interactive Goal Selector
-* The convenience function, **interactive_goal selector.py** is a *front-end* for path_planner.py that makes it easy to pick valid start/goal points by clicking on a map. Run it with `uv run interactive_goal_selector.py`
+* The convenience function, **interactive_goal_selector.py** is a *front-end* for path_planner.py that makes it easy to pick valid start/goal points by clicking on a map. Run it with `uv run interactive_goal_selector.py`
 * Here's how it works:
     1. Window opens showing your map (green = safe, black = obstacles)
     2. Click on green area → Sets start point (blue circle)
@@ -116,22 +116,21 @@
 * The A* path has jagged, stair-step shape because it moves cell-by-cell on a grid. Smooothing removes unneccesary waypoints and draws straight lines where possible.
 * Add smoothing to *path_planner.py*
 
-### Alright, already! Let's run this. Here are the steps.
+### Alright, already! Let's run this. Here are the steps in driving a trip.
 
-0. Plan a trip with the interactive planner.
 1. Park the robot in its Home position and turn it on.
 2. Start the odometer service on the robot
-4. Start the motor service on the robot.
-5. Run path follower on the laptop.
+3. Start the motor service on the robot.
+4. Run path follower on the laptop: `uv run path_follower.py`
 
 ## Interactive Waypoint Selector
 
 * When the robot drives along the path from start to finish, the A* algorithm hugs along any obstacles along the way. If you were driving a car through a narrow alley or tight spot, wouldn't you prefer a path half way between obstacles on the right and those on the left?
-* The *interactive wp_selector.py* program makes it possible to do this. It also addresses a couple of other issues as well.
-    * The map is much larger (with a size that is easy to set).
+* The **interactive_wp_selector.py** program makes it possible to do this. It also addresses a couple of other issues as well.
+    * The map display is much larger (with a size that is easy to set).
     * The path is no longer limited to just 2 points (start and goal), but can be defined by an unlimited number of points.
 * Here's how it works:
     1. Click a first point 
-    2. click a series of additional points defining the desired path
-    3. After specifying the final point, press 'F' to mark the last clicked point as the final waypoint and plan path.
+    2. click a sequence of additional points defining the desired path
+    3. After specifying the final point, press 'F' to mark the last clicked point as the final waypoint. The planned path is stored in *planned_path.json*.
 
