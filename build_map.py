@@ -126,35 +126,182 @@ def draw_surveyed_map(draw):
     All coordinates in metres, map frame (origin = robot home position).
 
     EXAMPLE PLACEHOLDER — replace with your actual measurements.
-    The numbers below are rough estimates from your SLAM map image;
-    they are NOT accurate and are here only to give you a starting
-    template to edit.
     """
 
     # ------------------------------------------------------------------
-    # LIVING ROOM / HOME AREA
-    # (robot home is at 0,0; desk corner at approx +1.66, -0.22)
+    # OFFICE / HOME AREA
+    # (robot home is at 0,0; desk corner at approx -0.2, +0.025)
+    # N,S,E,W are map directions: N at top, E at right
+    # Wall lines are centerlines (line width accounts for wall surface)
+    # Measurement granularity = 0.005
     # ------------------------------------------------------------------
 
-    # South wall of living room (behind robot)
+    # South wall of office
     # draw_wall(draw,  x1,   y1,   x2,   y2)
-    # draw_wall(draw, -2.5, -0.5,  6.5, -0.5)   # <-- example, measure & replace
+    draw_wall(draw, -1.51, -1.7,  1.585, -1.7)
 
-    # North wall
-    # draw_wall(draw, -2.5,  4.0,  6.5,  4.0)
+    # North wall with (0.89 + 0.1) doorway gap
+    draw_wall(draw, -1.51,  2.615, -1.21,  2.615)
+    draw_wall(draw, -0.22,  2.615,  1.585,  2.615)
 
     # West wall
-    # draw_wall(draw, -2.5, -0.5, -2.5,  4.0)
+    draw_wall(draw, -1.51, -1.7, -1.51,  -1.22)
+    draw_wall(draw, -1.585, -1.22, -1.585,  2.315)  # glass door (masked)
+    draw_wall(draw, -1.51, 2.315, -1.51,  2.615)
 
-    # East wall (with doorway gap)
-    # draw_wall(draw,  6.5, -0.5,  6.5,  1.5)   # south of doorway
-    # draw_wall(draw,  6.5,  2.4,  6.5,  4.0)   # north of doorway
+    # East wall with (1.815 + 0.1)doorway gap
+    draw_wall(draw,  1.585, -1.7,  1.585,  -0.5)   # south of doorway
+    draw_wall(draw,  1.585,  1.415,  1.585,  2.615)   # north of doorway
+
+    # Desk
+    # draw_filled_rect(draw, x_min, y_min, x_max, y_max)
+    # Right side
+    draw_filled_rect(draw, -0.71, -0.365, -0.25, -0.025)
+    # Left side
+    draw_filled_rect(draw, -0.71, -1.46, -0.25, -1.12)
+    # Back
+    draw_wall(draw, -0.71, -0.25,  -0.71, -1.46)
+
+    # File cabinet
+    draw_filled_rect(draw, 1.0, -1.65, 1.53, -0.98)
+
+    # Waste basket
+    draw_filled_rect(draw, 0.8, -1.65, 0.95, -1.38)
 
     # ------------------------------------------------------------------
-    # Add more rooms here as you measure them ...
+    # Dinette
+    # (8.13 + 0.1) to north wall of house from south wall of office
     # ------------------------------------------------------------------
 
-    pass   # remove this line once you add real walls
+    # "Stub" walls on west
+    draw_wall(draw,  -1.51,  6.2,  -1.51,  6.53)   # north of bay (meas=0.33)
+    draw_wall(draw,  -1.51, 2.615,  -1.51,  2.965)   # south of bay (meas=0.35)
+
+    # Bay offset walls (0.15 deep)
+    draw_wall(draw,  -1.51,  6.2,  -1.66,  6.2)   # north
+    draw_wall(draw,  -1.51, 2.965,  -1.66,  2.965)   # south
+
+    # Bay (0.96 deep x 1.58 wide)
+    draw_wall(draw,  -2.47,  5.37,  -1.66,  6.2)  # north angled section
+    draw_wall(draw,  -2.47, 3.79,  -2.47,  5.37)  # center section (1.58 lg)
+    draw_wall(draw,  -1.66, 2.965, -2.47,  3.79)  # south angled section
+
+    # North wall of dinette (2.375 + 0.1) long
+    draw_wall(draw, -1.51, 6.53,  0.965, 6.53)
+
+    # ------------------------------------------------------------------
+    # Kitchen
+    # ------------------------------------------------------------------
+
+    # Fridge wall
+    draw_wall(draw, 2.877, 2.615,  2.877, 3.33)
+
+    # Cabinets on south side
+    draw_wall(draw, -0.146, 2.615,  -0.146, 2.825)
+    draw_wall(draw, -0.146, 2.825,  0.20, 3.165)  # 45 degree
+    draw_wall(draw, 0.20, 3.165,  0.97, 3.165)
+    draw_wall(draw, 0.97, 3.25,  1.78, 3.25)
+    draw_wall(draw, 1.78, 3.25,  1.78, 2.615)
+
+    # Cabinets on north side
+    draw_wall(draw, 0.965, 6.53,  0.965, 4.42)
+    draw_wall(draw, 0.965, 4.42,  1.705, 4.42)
+    draw_wall(draw, 1.705, 4.42,  1.705, 5.88)
+    draw_wall(draw, 1.705, 5.88,  3.755, 5.88)
+    draw_wall(draw, 3.755, 5.88,  3.755, 4.20)
+    draw_wall(draw, 3.755, 4.20,  4.415, 4.20)
+
+    # Fridge
+    draw_filled_rect(draw, 1.915, 2.715, 2.735, 3.315)
+
+    # ------------------------------------------------------------------
+    # Piano room
+    # ------------------------------------------------------------------
+
+    # North wall
+    draw_wall(draw, 4.415, 6.53,  8.685, 6.53)
+
+    # West wall with doorway gap
+    draw_wall(draw, 4.415, 2.615,  4.415, 2.75)
+    draw_wall(draw, 4.415, 4.05,  4.415, 6.53)
+
+    # East wall
+    draw_wall(draw, 8.685, 6.53,  8.685, 3.07)
+
+    # South "recess" wall
+    draw_wall(draw, 8.685, 3.07,  7.78, 3.07)
+
+    # ------------------------------------------------------------------
+    # Living room
+    # 10.243 from south wall to north wall of house
+    # 8.203 from south end of east wall to north wall of house
+    # north wall of foyer almost exactly aligned w/ south wall of office
+    # ------------------------------------------------------------------
+
+    # North wall
+    draw_wall(draw, 1.585, 2.615,  4.415, 2.615)
+
+    # East Wall
+    draw_wall(draw, 7.78, 3.07,  7.78, -1.675)
+
+    # South wall
+    draw_wall(draw, 4.57, -3.81,  8.295, -3.81)
+
+    # Guest suite doorway column (R)
+    draw_wall(draw, 7.995, -3.81,  7.995, -3.51)
+    draw_wall(draw, 7.995, -3.51,  8.225, -3.51)
+    draw_wall(draw, 8.225, -3.51,  8.225, -3.81)
+
+    # Oblique wall with doorway gap
+    draw_wall(draw, 1.63, -1.7,  1.89, -1.89)
+    draw_wall(draw, 2.625, -2.415,  4.57, -3.81)
+
+    # MBR doorway column (R)
+    draw_wall(draw, 1.585, -1.435,  1.82, -1.435)
+    draw_wall(draw, 1.82, -1.435,  2.01, -1.57)
+    draw_wall(draw, 2.01, -1.57,  1.82, -1.835)
+
+    # MBR doorway column (L)
+    draw_wall(draw, 2.695, -2.465,  2.855, -2.2)
+    draw_wall(draw, 2.855, -2.2,  3.075, -2.335)
+    draw_wall(draw, 3.075, -2.335,  3.075, -2.735)
+
+    # TV table
+    draw_filled_rect(draw, 7.28, -0.355, 7.58, 0.825)
+
+    # Grandfather Clock
+    draw_filled_rect(draw, 5.115, -3.71, 5.515, -3.46)
+
+    # ------------------------------------------------------------------
+    # Foyer
+    # ------------------------------------------------------------------
+
+    # North wall
+    draw_wall(draw, 7.78, -1.675,  10.88, -1.675)
+
+    # East Wall
+    draw_wall(draw, 10.88, -1.675,  10.88, -3.81)
+
+    # South wall beyond guest suite
+    draw_wall(draw, 9.295, -3.81,  10.88, -3.81)
+    
+    # Guest suite doorway column (L)
+    draw_wall(draw, 9.365, -3.81,  9.365, -3.51)
+    draw_wall(draw, 9.365, -3.51,  9.585, -3.51)
+    draw_wall(draw, 9.595, -3.51,  9.595, -3.81)
+
+    # ------------------------------------------------------------------
+    # Master Bedroom
+    # ------------------------------------------------------------------
+
+    # West wall
+    draw_wall(draw, -1.55, -1.7, -1.55,  -6.055)
+
+    # South wall
+    draw_wall(draw, -1.55,  -6.055,  2.885, -6.055)
+
+    # East Wall
+    draw_wall(draw, 2.885, -6.055,  2.885, -2.6)
 
 
 # ---------------------------------------------------------------------------
@@ -257,7 +404,7 @@ if __name__ == "__main__":
     # Print a few reference points so you can cross-check in your image viewer
     print("Reference points (map frame → pixel):")
     point_info(0.0,  0.0,  "Home position (0, 0)")
-    point_info(1.66, -0.22, "Desk corner (~1.66, -0.22)")
+    point_info(-0.2, 0.025, "Desk corner (-0.2, +0.025)")
     print()
 
     build_map()
