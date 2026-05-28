@@ -35,10 +35,12 @@ map_metadata.json before running.
 """
 
 import sys
+import csv
 import json
 import math
 import time
 import threading
+from datetime import datetime
 import numpy as np
 import paho.mqtt.client as mqtt
 from sklearn.neighbors import KDTree
@@ -52,7 +54,7 @@ from topics import Topics
 # ---------------------------------------------------------------------------
 
 # Map — fill in from your map_metadata.json
-MAP_FILE        = "map_clean.png"
+MAP_FILE        = "survey_planning_base.png"
 MAP_RESOLUTION  = 0.05              # metres per pixel
 MAP_ORIGIN_X    = -3.0              # map-frame x of image bottom-left corner
 MAP_ORIGIN_Y    = -7.0              # map-frame y of image bottom-left corner
@@ -73,6 +75,15 @@ CORRECTION_ALPHA        = 0.3
 
 # How often to run ICP (seconds)
 UPDATE_INTERVAL_SEC     = 3.0
+
+# CSV log file — written alongside this script
+# Each row: elapsed_s, odom_x, odom_y, odom_h, map_x, map_y, map_h,
+#            corr_dx, corr_dy, corr_dtheta_deg, icp_err, cycle_ms
+LOG_FILE = f"icp_logs/icp_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+LOG_HEADER = ["elapsed_s", "odom_x", "odom_y", "odom_h_deg",
+               "map_x", "map_y", "map_h_deg",
+               "corr_dx", "corr_dy", "corr_dtheta_deg",
+               "icp_err", "cycle_ms"]
 
 # MQTT — broker is on the robot
 BROKER_ADDRESS  = "192.168.1.85"
@@ -123,14 +134,15 @@ def scan_to_cartesian(scan, max_range=MAX_SCAN_RANGE):
     Convert published scan to robot-frame Cartesian (x, y) array.
 
     scanner.py already negates the raw RPLidar angle, so "a" is CCW-positive.
-    Robot frame:  x = rightward,  y = forward.
+    Robot frame:  x = forward (east), y = leftward (north).
+    a=0 points east (+x); standard polar convention.
     """
     pts = []
     for entry in scan:
         a = entry["a"]              # already CCW — no negation needed
         d = entry["d"]
         if 0.05 < d < max_range:
-            pts.append([d * math.sin(a), d * math.cos(a)])
+            pts.append([d * math.cos(a), d * math.sin(a)])
     return np.array(pts) if pts else np.zeros((0, 2))
 
 
@@ -244,6 +256,7 @@ class ICPLocalizer:
 
         # map->odom correction — starts at identity (robot at known home pose)
         self.correction = {"dx": 0.0, "dy": 0.0, "dtheta_deg": 0.0}
+        self._last_icp_err = 0.0   # most recent ICP mean correspondence error
         self._lock = threading.Lock()
 
     def update(self, scan, odom_pose):
@@ -283,6 +296,8 @@ class ICPLocalizer:
                 abs(math.degrees(dtheta)) > MAX_CORRECTION_ROT_DEG):
             print("ICP result rejected — correction too large")
             return None
+
+        self._last_icp_err = mean_err if converged else float("inf")
 
         # Blend smoothly into current correction
         alpha = CORRECTION_ALPHA
@@ -325,30 +340,48 @@ def run():
     """
     Run the ICP localizer as a standalone MQTT node (paho, blocking).
 
-    Both scan and odometry topics are subscribed only long enough to receive
-    a single message per ICP cycle, then immediately unsubscribed.  Between
-    cycles the broker on the Raspberry Pi has zero active remote subscribers
-    and is completely idle with respect to this node.
+    Two-tier publish strategy:
 
-    Cycle (repeats every UPDATE_INTERVAL_SEC seconds):
-        1. Sleep for UPDATE_INTERVAL_SEC.
-        2. Subscribe to odom, grab one message, unsubscribe.
-        3. Subscribe to scan, grab one message, unsubscribe.
-        4. Run ICP.
-        5. Publish correction and map-frame pose.
+    HIGH RATE (10 Hz) — odometry is subscribed continuously.
+        Every incoming odom message is immediately transformed using the
+        current correction and republished on Topics.POSE.  This gives the
+        path follower a fresh corrected pose at the odometry rate.
+
+    LOW RATE (every UPDATE_INTERVAL_SEC) — ICP runs in the main thread.
+        One scan is grabbed (subscribe → receive → unsubscribe), ICP runs,
+        and the correction is updated.  The scan topic is live for < 200ms
+        per cycle so broker load on the Pi stays low.
     """
     GRAB_TIMEOUT_SEC = 2.0
 
-    loc = ICPLocalizer()
+    loc        = ICPLocalizer()
+    t_start    = time.monotonic()
+    odom_lock  = threading.Lock()
+    latest_odom = [None]          # shared between odom callback and ICP thread
+
+    # Open CSV log
+    log_fh  = open(LOG_FILE, "w", newline="")
+    log_csv = csv.writer(log_fh)
+    log_csv.writerow(LOG_HEADER)
+    print(f"Logging to {LOG_FILE}")
 
     # ------------------------------------------------------------------
-    # One-shot grab helper — works for any topic
+    # High-rate odometry callback — republishes corrected pose at 10 Hz
     # ------------------------------------------------------------------
-    def grab_one(client, topic):
-        """
-        Subscribe to topic, block until one message arrives (or timeout),
-        unsubscribe immediately, return decoded payload or None.
-        """
+    def on_odom(client, userdata, msg):
+        odom = json.loads(msg.payload.decode())
+        with odom_lock:
+            latest_odom[0] = odom
+        map_pose = loc.get_map_pose(odom)
+        client.publish(
+            TOPIC_POSE,
+            json.dumps({k: round(v, 6) for k, v in map_pose.items()})
+        )
+
+    # ------------------------------------------------------------------
+    # One-shot scan grab
+    # ------------------------------------------------------------------
+    def grab_scan(client):
         received = threading.Event()
         hold     = [None]
 
@@ -356,21 +389,24 @@ def run():
             hold[0] = json.loads(msg.payload.decode())
             received.set()
 
-        client.message_callback_add(topic, on_msg)
-        client.subscribe(topic)
+        client.message_callback_add(TOPIC_SCAN, on_msg)
+        client.subscribe(TOPIC_SCAN)
         received.wait(timeout=GRAB_TIMEOUT_SEC)
-        client.unsubscribe(topic)
-        client.message_callback_remove(topic)
+        client.unsubscribe(TOPIC_SCAN)
+        client.message_callback_remove(TOPIC_SCAN)
         return hold[0]
 
     # ------------------------------------------------------------------
-    # Connect — no persistent subscriptions; everything is one-shot
+    # Connect — subscribe to odom continuously, scan is one-shot
     # ------------------------------------------------------------------
     connected = threading.Event()
 
     def on_connect(client, userdata, flags, rc):
         if rc == 0:
             print(f"Connected to broker at {BROKER_ADDRESS}")
+            client.subscribe(TOPIC_ODOM)
+            print(f"Subscribed continuously to {TOPIC_ODOM}  (high-rate pose republish)")
+            print(f"Scan grabbed one-shot every {UPDATE_INTERVAL_SEC}s  (ICP update)")
             connected.set()
         else:
             print(f"Connection failed, rc={rc}")
@@ -378,54 +414,68 @@ def run():
     client = mqtt.Client()
     client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
     client.on_connect = on_connect
+    client.message_callback_add(TOPIC_ODOM, on_odom)
     client.connect(BROKER_ADDRESS, BROKER_PORT, 60)
     client.loop_start()
 
     print("ICP localizer starting — waiting for broker connection...")
     connected.wait()
-    print(f"Cycle interval: {UPDATE_INTERVAL_SEC}s  "
-          f"(odom + scan each grabbed as a single message per cycle)")
 
     try:
         while True:
-            # Step 1: idle — broker has no remote subscribers during this sleep
+            # Sleep between ICP cycles — odom callback runs in background
             time.sleep(UPDATE_INTERVAL_SEC)
 
             cycle_start = time.monotonic()
 
-            # Step 2: grab one odometry snapshot
-            odom = grab_one(client, TOPIC_ODOM)
-            if odom is None:
-                print("Odom timeout — skipping cycle")
+            # Grab one lidar scan (subscribe → receive → unsubscribe)
+            scan = grab_scan(client)
+            if scan is None:
+                print("Scan timeout — skipping ICP cycle")
                 continue
 
-            # Step 3: grab one lidar scan
-            scan = grab_one(client, TOPIC_SCAN)
-            if scan is None:
-                print("Scan timeout — skipping cycle")
+            # Use the most recent odom snapshot for ICP
+            with odom_lock:
+                odom = latest_odom[0]
+            if odom is None:
+                print("No odom yet — skipping ICP cycle")
                 continue
 
             elapsed_grab = (time.monotonic() - cycle_start) * 1000
-            print(f"Grabbed odom+scan in {elapsed_grab:.0f}ms", end="  |  ")
+            print(f"Grabbed scan in {elapsed_grab:.0f}ms", end="  |  ")
 
-            # Step 4: run ICP
+            # Run ICP
             correction = loc.update(scan, odom)
 
-            # Step 5: publish results
+            # Publish correction transform
             if correction is not None:
                 client.publish(
                     TOPIC_CORRECTION,
                     json.dumps({k: round(v, 6) for k, v in correction.items()})
                 )
-                map_pose = loc.get_map_pose(odom)
-                client.publish(
-                    TOPIC_POSE,
-                    json.dumps({k: round(v, 6) for k, v in map_pose.items()})
-                )
+
+            # Log this ICP cycle
+            cycle_ms = (time.monotonic() - cycle_start) * 1000
+            corr     = loc.correction
+            map_pose = loc.get_map_pose(odom)
+            log_csv.writerow([
+                round(time.monotonic() - t_start, 3),
+                round(odom["x"], 4),     round(odom["y"], 4),
+                round(math.degrees(odom["h"]), 3),
+                round(map_pose["x"], 4), round(map_pose["y"], 4),
+                round(math.degrees(map_pose["h"]), 3),
+                round(corr["dx"], 4),    round(corr["dy"], 4),
+                round(corr["dtheta_deg"], 3),
+                round(loc._last_icp_err, 4),
+                round(cycle_ms, 1),
+            ])
+            log_fh.flush()
 
     except KeyboardInterrupt:
         print("ICP localizer stopped.")
     finally:
+        log_fh.close()
+        print(f"Log saved to {LOG_FILE}")
         client.loop_stop()
         client.disconnect()
 

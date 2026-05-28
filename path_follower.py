@@ -79,10 +79,13 @@ class RobotInterface:
         print(f"✅ MQTT Connected")
         
         # Wait for odometry
-        print(f"⏳ Waiting for odometry...")
+        print(f"⏳ Waiting for pose on {Topics.POSE}...")
         start = time.time()
-        while not self.pose_updated and (time.time() - start) < 5.0:
+        while not self.pose_updated:
             time.sleep(0.1)
+            elapsed = time.time() - start
+            if elapsed > 4.0 and int(elapsed * 2) % 2 == 0:
+                print(f"   Still waiting... ({elapsed:.0f}s) — is icp_localizer running?")
         
         if self.pose_updated:
             print(f"✅ Odometry OK: ({self.x:.3f}, {self.y:.3f}, {np.degrees(self.theta):.1f}°)")
@@ -91,19 +94,19 @@ class RobotInterface:
     
     def _on_connect(self, client, userdata, flags, rc):
         if rc == 0:
-            client.subscribe(Topics.ODOM_POSE)
+            client.subscribe(Topics.POSE)
     
     def _on_message(self, client, userdata, msg):
         try:
             data = json.loads(msg.payload.decode())
             with self.pose_lock:
-                self.x = float(data['x'])
-                self.y = float(data['y'])
+                self.x     = float(data['x'])
+                self.y     = float(data['y'])
                 self.theta = float(data['h'])
-                self.omega = float(data['hr'])
+                self.omega = float(data.get('hr', 0.0))  # hr absent from Topics.POSE
                 self.pose_updated = True
-        except:
-            pass
+        except Exception as e:
+            print(f"⚠️  Pose parse error: {e}")
     
     def get_pose(self):
         """Get current robot pose (x, y, theta, omega)"""
