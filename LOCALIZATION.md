@@ -32,8 +32,8 @@
 
 * In our new clean architecture, we will have Programs (not "nodes"):
 ```
-odometry.py          → Tracks wheel movement (odom frame)
-localization.py      → Figures out position on map (map frame)
+odometry.py          → Tracks robot movement (odom frame)
+localizer.py      → Figures out position on map (map frame)
 path_planner.py      → Creates paths in map coordinates
 path_follower.py     → Follows paths using localized position
 motor_controller.py  → Low-level motor control
@@ -72,21 +72,6 @@ map → odom → base_link
 
 ## Implementing the new architecture:
 
-#### Phase 1 (this week): Simple localization
-```
-# localization.py - Version 1.0 (no particle filter yet)
-# Just transforms odometry to map frame using initial pose
-```
-* This gives you:
-
-    Proper architecture
-    Odometry stays clean (always starts at 0,0,0)
-    Easy to add particle filter later
-    Only ~50 lines of code
-
-#### Phase 2 (later): Add particle filter
-```
-# localization.py - Version 2.0
-# Adds particle filter that uses lidar to correct drift
+#### localizer.py uses ICP & lidar scan to correct drift
 ```
 
