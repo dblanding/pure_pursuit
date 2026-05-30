@@ -54,7 +54,7 @@ from topics import Topics
 # ---------------------------------------------------------------------------
 
 # Map — fill in from your map_metadata.json
-MAP_FILE        = "survey_planning_base.png"
+MAP_FILE        = "survey_map.png"
 MAP_RESOLUTION  = 0.05              # metres per pixel
 MAP_ORIGIN_X    = -3.0              # map-frame x of image bottom-left corner
 MAP_ORIGIN_Y    = -7.0              # map-frame y of image bottom-left corner
