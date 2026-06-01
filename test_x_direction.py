@@ -7,13 +7,13 @@ import time
 # Create a path that moves ONLY in +X direction
 path_data = {
     "path": [
-        [1.0, 2.0],  # Start
-        [2.0, 2.0]   # Goal (1 meter forward in X, no change in Y)
+        [0.0, 0.0],  # Start
+        [2.5, 0.0]   # Goal (2.5 meters forward in X, no change in Y)
     ],
     "num_waypoints": 2,
-    "start": [1.0, 2.0],
-    "goal": [2.0, 2.0],
-    "total_distance": 1.0,
+    "start": [0.0, 0.0],
+    "goal": [2.5, 0.0],
+    "total_distance": 2.5,
     "timestamp": time.time()
 }
 
