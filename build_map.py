@@ -157,6 +157,9 @@ def draw_fixed_features(draw):
     # Waste basket
     draw_filled_rect(draw, 0.8,  -1.65,  0.95, -1.38)
 
+    # Glass top table
+    draw_filled_rect(draw, 0.85,  1.835,  1.105, 2.135)
+
     # ------------------------------------------------------------------
     # DINETTE
     # 8.13 + 0.1 m from south wall of office to north wall of house
@@ -231,7 +234,7 @@ def draw_fixed_features(draw):
     draw_wall(draw, 7.78,   3.07,   7.78,  -1.675)
 
     # South wall
-    draw_wall(draw, 4.57,  -3.81,   8.00,  -3.81)
+    draw_wall(draw, 4.57,  -3.81,   8.295,  -3.81)
 
     # Oblique south-west wall — doorway gap
     draw_wall(draw, 1.63,  -1.7,    1.89,  -1.89)
@@ -258,13 +261,20 @@ def draw_fixed_features(draw):
     # ------------------------------------------------------------------
 
     # North wall
-    draw_wall(draw, 7.78,  -1.675, 10.88,  -1.675)
+    draw_wall(draw, 7.78,  -1.675, 8.9,  -1.675)
+    draw_wall(draw, 9.82,  -1.675, 10.88,  -1.675)
 
     # East wall
     draw_wall(draw, 10.88, -1.675, 10.88,  -3.81)
 
     # South wall
-    draw_wall(draw, 10.88, -3.81,   8.00,  -3.81)
+    draw_wall(draw, 9.295, -3.81,   10.88,  -3.81)
+
+    # Doorway column L
+    draw_filled_rect(draw, 7.995, -3.8,   8.225, -3.61)
+
+    # Doorway column R
+    draw_filled_rect(draw, 9.365, -3.8,   9.595, -3.61)
 
     # ------------------------------------------------------------------
     # MASTER BEDROOM
@@ -274,11 +284,26 @@ def draw_fixed_features(draw):
     draw_wall(draw, -1.55, -1.7,   -1.55,  -6.055)
 
     # South wall
-    draw_wall(draw, -1.55, -6.055,  2.885, -6.055)
+    draw_wall(draw, -1.55, -6.055,  1.05, -6.055)
+    draw_wall(draw, 1.95, -6.055,  2.15, -6.055)
+
+    # Oblique SE corner
+    draw_wall(draw, 2.15, -6.055,  2.885, -5.4)
 
     # East wall
-    draw_wall(draw,  2.885, -6.055,  2.885, -2.6)
+    draw_wall(draw,  2.885, -5.4,  2.885, -2.6)
 
+    # King bed
+    draw_filled_rect(draw, -1.51, -4.835,  0.675, -2.915)
+
+    # Night table R
+    draw_filled_rect(draw, -1.4, -2.7,  -1.05, -1.9)
+
+    # Night table L
+    draw_filled_rect(draw, -1.4, -5.9,  -1.05, -5.1)
+
+    # Dresser
+    draw_filled_rect(draw, 2.405, -4.815,  2.785, -3.315)
 
 def draw_moveable_obstacles(draw):
     """
