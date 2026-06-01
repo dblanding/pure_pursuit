@@ -14,11 +14,6 @@ metadata = {
     "occupied_threshold": 0.65,
     "free_threshold": 0.35,
     "robot_radius": 0.20,    # meters
-    "map_files": {
-        "occupancy": "map_clean.png",
-        "binary": "map_binary.png",
-        "planning": "map_planning.png"
-    }
 }
 
 with open('map_metadata.json', 'w') as f:
