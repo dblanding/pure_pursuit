@@ -50,10 +50,10 @@ class InteractivePlanner:
             else:
                 color = (0, 255, 255)     # Intermediate = yellow
 
-            cv2.circle(self.display, (col, row), 8, color, -1)
-            cv2.circle(self.display, (col, row), 10, (255, 255, 255), 2)
+            cv2.circle(self.display, (col, row), 3, color, -1)
+            cv2.circle(self.display, (col, row), 5, (255, 255, 255), 2)
             cv2.putText(self.display, str(i + 1), (col + 12, row + 5),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
         # Draw connector lines between waypoints
         if len(self.waypoints) > 1:
@@ -153,8 +153,8 @@ class InteractivePlanner:
         # Redraw waypoints on top of path
         for i, (row, col, wx, wy) in enumerate(self.waypoints):
             color = (255, 0, 0) if i == 0 else (0, 0, 255) if i == len(self.waypoints) - 1 else (0, 255, 255)
-            cv2.circle(self.display, (col, row), 8, color, -1)
-            cv2.circle(self.display, (col, row), 10, (255, 255, 255), 2)
+            cv2.circle(self.display, (col, row), 3, color, -1)
+            cv2.circle(self.display, (col, row), 5, (255, 255, 255), 2)
 
         cv2.imshow(self._win_name(), self._scaled(self.display))
 
