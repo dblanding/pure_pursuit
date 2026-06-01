@@ -1,23 +1,20 @@
 {
   "path": [
+    
     [
-      1.0,
-      2.0
-    ],
-    [
-      2.0,
-      2.0
+      2.5,
+      0.0
     ]
   ],
-  "num_waypoints": 2,
+  "num_waypoints": 1,
   "start": [
-    1.0,
-    2.0
+    0.0,
+    0.0
   ],
   "goal": [
-    2.0,
-    2.0
+    2.5,
+    0.0
   ],
-  "total_distance": 1.0,
+  "total_distance": 2.5,
   "timestamp": 1778586522.8761523
 }

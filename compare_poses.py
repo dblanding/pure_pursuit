@@ -51,7 +51,7 @@ lock      = threading.Lock()
 t_start   = time.monotonic()
 last_print = [0.0]
 
-CSV_FILE  = f"pose_compare_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+CSV_FILE  = f"log_files/pose_compare_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
 CSV_COLS  = ["elapsed_s",
              "odom_x", "odom_y", "odom_h_deg",
              "map_x",  "map_y",  "map_h_deg",

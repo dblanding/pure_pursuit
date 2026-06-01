@@ -79,7 +79,7 @@ UPDATE_INTERVAL_SEC     = 3.0
 # CSV log file — written alongside this script
 # Each row: elapsed_s, odom_x, odom_y, odom_h, map_x, map_y, map_h,
 #            corr_dx, corr_dy, corr_dtheta_deg, icp_err, cycle_ms
-LOG_FILE = f"icp_logs/icp_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+LOG_FILE = f"log_files/icp_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
 LOG_HEADER = ["elapsed_s", "odom_x", "odom_y", "odom_h_deg",
                "map_x", "map_y", "map_h_deg",
                "corr_dx", "corr_dy", "corr_dtheta_deg",

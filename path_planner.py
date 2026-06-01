@@ -21,7 +21,7 @@ class Node:
     parent: Optional['Node'] = field(compare=False, default=None)
 
 class PathPlanner:
-    def __init__(self, map_file='map_planning.png', metadata_file='map_metadata.json'):
+    def __init__(self, map_file='survey_planning.png', metadata_file='map_metadata.json'):
         """
         Initialize path planner
         

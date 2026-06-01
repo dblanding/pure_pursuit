@@ -3,7 +3,7 @@
 Plot the ICP correction log produced by icp_localizer.py.
 
 Usage:
-    python plot_icp_log.py                    # auto-finds the most recent log
+    python plot_icp_log.py                   # auto-finds the most recent log
     python plot_icp_log.py icp_log_XXXX.csv  # specific file
 
 Produces a 4-panel figure showing:
@@ -158,7 +158,7 @@ if __name__ == "__main__":
         filename = sys.argv[1]
     else:
         # Auto-find most recent log
-        logs = sorted(glob.glob("icp_logs/icp_log_*.csv"))
+        logs = sorted(glob.glob("log_files/icp_log_*.csv"))
         if not logs:
             print("No icp_log_*.csv files found")
             print("Usage: python plot_icp_log.py [logfile.csv]")

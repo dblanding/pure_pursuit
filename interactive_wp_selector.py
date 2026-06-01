@@ -18,7 +18,7 @@ class InteractivePlanner:
         self.is_final = False  # Flag to indicate if we're ready to plan
 
         # Load planning map for visualization
-        self.map_img = cv2.imread('map_planning.png', cv2.IMREAD_GRAYSCALE)
+        self.map_img = cv2.imread('survey_planning.png', cv2.IMREAD_GRAYSCALE)
         self.display = cv2.cvtColor(self.map_img, cv2.COLOR_GRAY2BGR)
 
         # Color free space green for clarity

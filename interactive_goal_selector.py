@@ -14,7 +14,7 @@ class InteractivePlanner:
         self.current_path = None  # Store the last planned path
         
         # Load planning map for visualization
-        self.map_img = cv2.imread('map_planning.png', cv2.IMREAD_GRAYSCALE)
+        self.map_img = cv2.imread('survey_planning.png', cv2.IMREAD_GRAYSCALE)
         self.display = cv2.cvtColor(self.map_img, cv2.COLOR_GRAY2BGR)
         
         # Color free space green for clarity
