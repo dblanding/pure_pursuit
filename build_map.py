@@ -305,6 +305,12 @@ def draw_fixed_features(draw):
     # Dresser
     draw_filled_rect(draw, 2.405, -4.815,  2.785, -3.315)
 
+    # Chest
+    draw_wall(draw, 2.20, -5.78,  2.03, -5.555)
+    draw_wall(draw, 2.03, -5.555,  2.43, -5.15)
+    draw_wall(draw, 2.43, -5.15,  2.65, -5.43)
+    draw_wall(draw, 2.65, -5.43,  2.20, -5.78)
+
 def draw_moveable_obstacles(draw):
     """
     Approximate positions of semi-permanent moveable furniture.
