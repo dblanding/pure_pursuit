@@ -100,13 +100,13 @@ class RobotInterface:
         try:
             data = json.loads(msg.payload.decode())
             with self.pose_lock:
-                self.x     = float(data['x'])
-                self.y     = float(data['y'])
+                self.x = float(data['x'])
+                self.y = float(data['y'])
                 self.theta = float(data['h'])
                 self.omega = float(data.get('hr', 0.0))  # hr absent from Topics.POSE
                 self.pose_updated = True
-        except Exception as e:
-            print(f"⚠️  Pose parse error: {e}")
+        except:
+            pass
     
     def get_pose(self):
         """Get current robot pose (x, y, theta, omega)"""
@@ -120,7 +120,7 @@ class RobotInterface:
             "angular": round(angular, 4),
             "timestamp": time.time()
         }
-        self.client.publish(Topics.MOTOR_CMD, json.dumps(cmd))
+        self.client.publish(Topics.NAV_CMD_VEL, json.dumps(cmd))
     
     def stop(self):
         """Stop the robot"""
