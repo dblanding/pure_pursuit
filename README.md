@@ -1,6 +1,6 @@
 # Pure Pursuit
 
-> This project is one of of a bunch of projects, all related to the [Raspibot](https://github.com/dblanding/raspibot) project. Locally, I keep them co-located under a common parent directory, in order facilitate import access to S.P.O.T. files such as *topics.py* (which contains the names of various MQTT topics). 
+> This project is one of of several, all related to the [Raspibot](https://github.com/dblanding/raspibot) project. Locally, I keep them co-located under a common parent directory, in order facilitate import access to S.P.O.T. files such as *topics.py* (which contains the names of various MQTT topics). 
  
 ## Starts with a decent map
 * I used Gimp to clean up a map (made with pose-graph_SLAM) and saved it as map_clean.png
@@ -116,7 +116,7 @@
 * The A* path has jagged, stair-step shape because it moves cell-by-cell on a grid. Smooothing removes unneccesary waypoints and draws straight lines where possible.
 * Add smoothing to *path_planner.py*
 
-### Alright, already! Let's run this. Here are the steps in driving a trip.
+### Here is the order of steps in driving a trip.
 
 1. Park the robot in its Home position and turn it on.
 2. Start the odometer service on the robot
@@ -133,4 +133,56 @@
     1. Click a first point 
     2. click a sequence of additional points defining the desired path
     3. After specifying the final point, press 'F' to mark the last clicked point as the final waypoint. The planned path is stored in *planned_path.json*.
+
+## Improve pose accuracy with a better map and ICP Localization
+
+Although the Optical Tracking Odometry Sensor (OTOS) does a remarkably good job of determining the robot's pose, it is not perfect and any errors, however small, tend to accumulate and grow over time. This inaccuracy can become signficant over long runs. One way to obtain more accurate pose information is if we have an accurate map, we can use data from the lidar scaner to localize the robot's position on the map. This is called *ICP Localization*.
+
+### Overview of how ICP Localization works to correct odometer drift
+
+We need to add 2 new things:
+1. A more accurte survey map
+    * Use some basic surveying tools and *build_map.py*. This program actually produces several .png map files matching map_metadata.json exactly, one of which is a display that shows the new map overlaid on the original "approximate" map, making it easy to check progress as the new map is being built.
+2. A program *icp_localizer.py* that can find the robot's accurate location on the map.
+
+Iterative Closest Point (ICP) localization corrects odometer drift by aligning real-time sensor data (like a LiDAR scan) with a point cloud from a pre-existing map. By calculating the exact shift needed to match the sensor data to the environment, it overrides the accumulated, inaccurate dead-reckoning of the odometer. 
+
+The correction process happens in a structured, iterative loop:
+
+1. Motion Prediction (The Odometry)
+    - When the robot moves, the OTOS publishes pose under Topic.ODOM_POSE. Over time, small sensor inaccuracies compound into odometer drift, meaning the vehicle thinks it is somewhere it is not. 
+2. Initial Guess
+   - The algorithm takes the ODOM_POSE estimate as its starting point or "initial guess". This rough position is used to pull up the correct section of the map. 
+3. Point Cloud Association
+   - Every few seconds, a LiDAR scan is captured and converted to a new "point cloud." ICP searches for the nearest points between this new scan and the point cloud from the reference map to find corresponding pairs. 
+4. Transformation and Error Minimization
+   - ICP calculates the geometric transformation (rotation and translation) needed to snap the new scan onto the reference map so that the distance between paired points is as close to zero as possible.
+5. Iteration and Correction
+   - Because the initial guess is only approximate, the association and transformation steps need to be repeated over and over in micro-adjustments. The algorithm is said to have converged once the distance between the point pairs drops below a specified threshold. 
+6. Correcting the Drift
+    - The computed corrections (dx, dy and dθ) of the ICP pose w/r/t the odom pose can then be applied to the corresponding components of odom pose, improving the estimate of the vehicle's true pose. By applying these corrections gradually, "jumps" in the pose value can be avoided. The improved pose is published as Topics.POSE.
+
+Adding the icp_localizer node changes the previous flow of mqtt messages. The path_follower node will no longer subscribe to (Topics.ODOM_POSE) but will subscribe to (Topics.POSE) instead.
+
+odometer → (Topics.ODOM_POSE) → icp_localizer → (Topics.POSE) → path_follower
+
+### This adds an additional step when driving a trip.
+
+1. Park the robot in its Home position and turn it on.
+2. Start the scanner
+3. Start the odometer service on the robot (allow it time to calibrate)
+4. Start icp_localizer on the laptop
+4. Run path_follower on the laptop: `uv run path_follower.py`
+
+## Add Obstacle Avoidance
+
+An *obstacle_avoidance* node acts as a **collision safety net** which will kick in and apply the brakes if the scanner detects an object in its path close ahead. The path_follower node will no longer publish Topics.MOTOR_CMD messages directly to the motor_control node, but will instead publish Topics.NAV_CMD messages to the new obstacle_avoidance node, which will in turn re-publish them on Topics.MOTOR_CMD except when an imminent crash is detected.
+
+path_follower → (Topics.NAV_CMD) → obstacle_avoider → (Topics.MOTOR_CMD) → motor_control
+
+### Startup order
+
+1. icp_localizer.py      (as before)
+2. obstacle_avoidance.py (new — start before path_follower)
+3. path_follower.py      (as before)
 
