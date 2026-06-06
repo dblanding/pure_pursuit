@@ -32,11 +32,11 @@
 
 * In our new clean architecture, we will have Programs (not "nodes"):
 ```
-odometry.py          → Tracks robot movement (odom frame)
-localizer.py      → Figures out position on map (map frame)
+odometer.py          → Tracks robot movement (odom frame)
+icp_localizer.py     → Figures out position on map (map frame)
 path_planner.py      → Creates paths in map coordinates
 path_follower.py     → Follows paths using localized position
-motor_controller.py  → Low-level motor control
+motor_control.py     → Low-level motor control
 ```
 
 * Whereas ROS uses these 3 coordinate frames:
@@ -55,7 +55,7 @@ motor_controller.py  → Low-level motor control
         * Moves with the robot
 
 * We will refer to them this way (and we won't be using ROS tf):
-    1. Map frame:    Global coordinates (your map_metadata.json defines this)
+    1. Map frame:    Global coordinates (map_metadata.json defines this)
     2. Odom frame:   Local coordinates (where odometry starts at 0,0,0)
     3. Robot frame:  Robot's perspective (forward = +X in robot's view)
 
@@ -69,9 +69,4 @@ map → odom → base_link
 * For Communication between programs:
     * We will use MQTT topics (not the same as ROS topics, but same idea)
     * We will use JSON messages (not ROS .msg types)
-
-## Implementing the new architecture:
-
-#### localizer.py uses ICP & lidar scan to correct drift
-```
 

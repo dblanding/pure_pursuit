@@ -1,6 +1,6 @@
-# Pure Pursuit
+# Pure Pursuit: The geometric path-tracking algorithm that allows autonomous mobile robots to follow a predefined path smoothly.
 
-> This project is one of of several, all related to the [Raspibot](https://github.com/dblanding/raspibot) project. Locally, I keep them co-located under a common parent directory, in order facilitate import access to S.P.O.T. files such as *topics.py* (which contains the names of various MQTT topics). 
+> This project is one of of several projects, all related to the [Raspibot](https://github.com/dblanding/raspibot) project. Locally, I keep them co-located within a common parent directory, in order to facilitate import access to S.P.O.T. files such as *topics.py* (which contains the names of various MQTT topics). 
  
 ## Starts with a decent map
 * I used Gimp to clean up a map (made with pose-graph_SLAM) and saved it as map_clean.png
@@ -10,9 +10,9 @@
         * `map_binary.png`
         * `map_inflation_viz.png`
         * `map_planning.png`
-    2. Create Map Metadata File
+    2. Create file *map_metadata.json*
         * Run `python create_metadata.py`
-    3. Create A Path Planner*
+    3. Create A* Path Planner
         * Test it by running `uv run path_planner.py`
         ```
         ============================================================
@@ -120,7 +120,7 @@
 
 1. Park the robot in its Home position and turn it on.
 2. Start the odometer service on the robot
-3. Start the motor service on the robot.
+3. Start the motor_control service on the robot. (N/A: changed to auto-start)
 4. Run path follower on the laptop: `uv run path_follower.py`
 
 ## Interactive Waypoint Selector
@@ -131,19 +131,19 @@
     * The path is no longer limited to just 2 points (start and goal), but can be defined by an unlimited number of points.
 * Here's how it works:
     1. Click a first point 
-    2. click a sequence of additional points defining the desired path
+    2. Click a sequence of additional points defining the desired path
     3. After specifying the final point, press 'F' to mark the last clicked point as the final waypoint. The planned path is stored in *planned_path.json*.
 
 ## Improve pose accuracy with a better map and ICP Localization
 
-Although the Optical Tracking Odometry Sensor (OTOS) does a remarkably good job of determining the robot's pose, it is not perfect and any errors, however small, tend to accumulate and grow over time. This inaccuracy can become signficant over long runs. One way to obtain more accurate pose information is if we have an accurate map, we can use data from the lidar scaner to localize the robot's position on the map. This is called *ICP Localization*.
+Although the Optical Tracking Odometry Sensor (OTOS) does a remarkably good job of determining the robot's pose, it is not perfect and any errors, however small, tend to accumulate and grow over time. This inaccuracy can become signficant over long runs. One way to obtain more accurate pose information is if the robot can "look at its environment" and compare what it sees with what it ought to be seeing based on an accurate map. This technique is called *ICP Localization*. It basically compares a 'source' point cloud of a laser scan with a 'target' point cloud from an accurate map and tries to get them to line up as perfectly as possible. The amount that the source points need to be shifted is a measure of the odometer drift.
 
-### Overview of how ICP Localization works to correct odometer drift
-
-We need to add 2 new things:
-1. A more accurte survey map
+In order to implement this, we will need to add 2 new things:
+1. A more accurate survey map
     * Use some basic surveying tools and *build_map.py*. This program actually produces several .png map files matching map_metadata.json exactly, one of which is a display that shows the new map overlaid on the original "approximate" map, making it easy to check progress as the new map is being built.
 2. A program *icp_localizer.py* that can find the robot's accurate location on the map.
+
+### Overview of how ICP Localization works to correct odometer drift
 
 Iterative Closest Point (ICP) localization corrects odometer drift by aligning real-time sensor data (like a LiDAR scan) with a point cloud from a pre-existing map. By calculating the exact shift needed to match the sensor data to the environment, it overrides the accumulated, inaccurate dead-reckoning of the odometer. 
 
@@ -162,17 +162,25 @@ The correction process happens in a structured, iterative loop:
 6. Correcting the Drift
     - The computed corrections (dx, dy and dθ) of the ICP pose w/r/t the odom pose can then be applied to the corresponding components of odom pose, improving the estimate of the vehicle's true pose. By applying these corrections gradually, "jumps" in the pose value can be avoided. The improved pose is published as Topics.POSE.
 
-Adding the icp_localizer node changes the previous flow of mqtt messages. The path_follower node will no longer subscribe to (Topics.ODOM_POSE) but will subscribe to (Topics.POSE) instead.
+Adding the icp_localizer node requires a change in the previous flow of mqtt messages. The path_follower node will no longer subscribe to (Topics.ODOM_POSE) but will subscribe to (Topics.POSE) instead.
 
 odometer → (Topics.ODOM_POSE) → icp_localizer → (Topics.POSE) → path_follower
 
-### This adds an additional step when driving a trip.
+## Making a tyupical run
+
+0. Use interactive_wp_selector to plan a path
+
+![Planned Path](imgs/path_result.png)
 
 1. Park the robot in its Home position and turn it on.
 2. Start the scanner
-3. Start the odometer service on the robot (allow it time to calibrate)
+3. Start (& reset) robot odometer service (allow several seconds to calibrate)
 4. Start icp_localizer on the laptop
-4. Run path_follower on the laptop: `uv run path_follower.py`
+5. Run path_follower on the laptop: `uv run path_follower.py` (to completion)
+6. Stop scanner, odometer, and localizer
+7. Run plot_icp_log.py to display run performance
+
+![Run performance Plot](imgs/icp_localizer-plot.png)
 
 ## Add Obstacle Avoidance
 
