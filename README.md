@@ -194,3 +194,10 @@ path_follower → (Topics.NAV_CMD) → obstacle_avoider → (Topics.MOTOR_CMD) �
 2. obstacle_avoidance.py (new — start before path_follower)
 3. path_follower.py      (as before)
 
+## Evolve Obstacle Avoidance to steer through narrow gaps
+
+Just steering along a path consisting of a series of pre-selected waypoints doesn't really qualify as being autonomous behavor, does it? As an experiment in autonomous behavior, I decided to expand the role of the Obstacle Avoidance node to go beyond just applying the brakes and actually take control of steering in tight quarters. When the robot needs to go through a tight gap between obstacles, it can get a little dicey if you have to do it "blindfolded". For this, I relied on the use of the VFH (Vector Field Histogram) algorithm. We have lidar, so let's use it to build a VFH of the environment, showing the gap between the obstacles as a "valley" between "2 hills" in the linear histogram.
+
+![VFH Visualizer](imgs/VFH-visualizer.png)
+
+In the figure above, the polar plot on the left is like a bird's-eye view of a robot proceeding along its local X-axis about to enter a narrow gap which is barely wide enough to allow it through. Driving a path straight to goal would not be successful. To get through the gap, the path_follower needs to temporarily relinquish steering control to the obstacle_avoider, until it gets through the gap. The algorithm is pretty simple: At the entrance, steer in place to align the robot with the center of the open channel, then proceed through the gap with zero steering. Upon exit, return control to the path_follower.
