@@ -91,6 +91,11 @@ class RobotInterface:
             print(f"✅ Odometry OK: ({self.x:.3f}, {self.y:.3f}, {np.degrees(self.theta):.1f}°)")
         else:
             print(f"⚠️  No odometry received")
+
+    def publish_goal(self, x, y):
+        """Publish current target waypoint for VFH steering reference."""
+        self.client.publish(Topics.NAV_GOAL,
+                            json.dumps({"x": round(x, 4), "y": round(y, 4)}))
     
     def _on_connect(self, client, userdata, flags, rc):
         if rc == 0:
@@ -140,16 +145,19 @@ class PurePursuitController:
     SEQUENTIAL VERSION - visits waypoints in order without skipping
     """
     
-    def __init__(self, lookahead_distance=0.3, max_linear_vel=0.3, max_angular_vel=1.0):
+    def __init__(self, lookahead_distance=0.3, max_linear_vel=0.3, max_angular_vel=1.0,
+                 robot=None):
         """
         Args:
             lookahead_distance: Distance ahead to look for target point (meters)
             max_linear_vel: Maximum linear velocity (m/s)
             max_angular_vel: Maximum angular velocity (rad/s)
+            robot: RobotInterface instance (used to publish goal waypoint to VFH)
         """
         self.lookahead = lookahead_distance
         self.max_linear = max_linear_vel
         self.max_angular = max_angular_vel
+        self.robot = robot   # reference for publishing goal to VFH
         self.current_waypoint_idx = 0  # Track progress along path
         self.waypoint_reached_dist = 0.15  # Distance to consider waypoint "reached"
     
@@ -183,6 +191,10 @@ class PurePursuitController:
             if dist < self.waypoint_reached_dist:
                 print(f"  ✓ Reached waypoint {self.current_waypoint_idx}: {path[self.current_waypoint_idx]}")
                 self.current_waypoint_idx += 1
+                # Publish next waypoint so VFH knows current goal direction
+                if self.current_waypoint_idx < len(path) and self.robot:
+                    nx, ny = path[self.current_waypoint_idx]
+                    self.robot.publish_goal(nx, ny)
         
         # If we've completed all waypoints, return final goal
         if self.current_waypoint_idx >= len(path):
@@ -265,6 +277,10 @@ def follow_path(robot, path, controller, goal_tolerance=0.1, rate=10):
     
     goal_x, goal_y = path[-1]
     print(f"🎯 Following path to goal: ({goal_x:.2f}, {goal_y:.2f})")
+
+    # Publish first waypoint immediately so VFH has a goal from the start
+    if len(path) > 0 and controller.robot:
+        controller.robot.publish_goal(*path[0])
     print(f"   Path has {len(path)} waypoints")
     print(f"   Lookahead: {controller.lookahead:.2f}m")
     print(f"   Max speeds: {controller.max_linear:.2f} m/s, {controller.max_angular:.2f} rad/s")
@@ -363,7 +379,8 @@ if __name__ == '__main__':
     controller = PurePursuitController(
         lookahead_distance=0.3,   # 30cm lookahead
         max_linear_vel=0.25,      # 25 cm/s max speed
-        max_angular_vel=1.0       # 1 rad/s max turn rate
+        max_angular_vel=1.0,      # 1 rad/s max turn rate
+        robot=robot               # passes goal waypoint to VFH
     )
     
     response = input("\nFollow path? (y/n): ")
