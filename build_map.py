@@ -223,6 +223,28 @@ def draw_fixed_features(draw):
     # South recess wall
     draw_wall(draw, 8.685,  3.07,   7.78,   3.07)
 
+    # Table East wall
+    #draw_filled_rect(draw, 4.600, 4.852, 5.045, 5.436)
+
+    # Corner book case
+    draw_wall(draw, 8.245, 3.19,  8.035, 3.4)
+    draw_wall(draw, 8.035, 3.4, 8.355, 3.72)
+    draw_wall(draw, 8.355, 3.72,  8.565, 3.51)
+    draw_wall(draw, 8.565, 3.51,  8.245, 3.19)
+
+    # Piano
+    draw_filled_rect(draw, 6.634, 5.620,  6.684, 5.670)  # R leg (6.659, 5.645)
+    draw_filled_rect(draw, 7.121, 4.419, 7.171, 4.469)  # L leg (7.146, 4.444)
+    draw_filled_rect(draw, 5.515, 4.08, 5.565, 4.13)  # back leg (5.54, 4.105)
+    draw_filled_rect(draw, 6.801, 5.069,  6.851, 5.119)  # pedals R (6.826, 5.094)
+    draw_filled_rect(draw, 6.856, 4.936,  6.906, 4.986)  # pedals L (6.881, 4.961)
+    
+    # Bench
+    draw_filled_rect(draw, 7.458, 5.478,  7.508, 5.528)  # RF leg (7.483, 5.503)
+    draw_filled_rect(draw, 7.615, 5.064,  7.665, 5.114)  # LF leg (7.64, 5.089)
+    draw_filled_rect(draw, 7.904, 5.170,  7.954, 5.220)  # LR leg (7.929, 5.195)
+    draw_filled_rect(draw, 7.750, 5.586,  7.800, 5.636)  # RR leg (7.775, 5.611)
+
     # ------------------------------------------------------------------
     # LIVING ROOM
     # ------------------------------------------------------------------

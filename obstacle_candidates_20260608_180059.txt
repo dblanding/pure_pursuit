@@ -1,0 +1,35 @@
+Unknown obstacle candidates — 2026-06-08 18:00:59
+Map: survey_map.png  Resolution: 0.05m  Match radius: 3px  Min points: 15  Min scans: 4
+Total unmatched points: 9059  Clusters reported: 8
+
+Candidate 1  (confidence HIGH — 4139 points, 274 scans)
+  Centre: (0.646, 1.754)
+  draw_filled_rect(draw, 0.334, 1.481, 0.958, 2.026)
+
+Candidate 2  (confidence HIGH — 4093 points, 217 scans)
+  Centre: (2.894, 0.283)
+  draw_filled_rect(draw, 2.636, -0.910, 3.152, 1.477)
+
+Candidate 3  (confidence HIGH — 427 points, 161 scans)
+  Centre: (0.394, -0.757)
+  draw_filled_rect(draw, 0.143, -0.926, 0.645, -0.587)
+
+Candidate 4  (confidence HIGH — 132 points, 93 scans)
+  Centre: (-0.323, -0.631)
+  draw_filled_rect(draw, -0.417, -0.704, -0.229, -0.559)
+
+Candidate 5  (confidence HIGH — 72 points, 58 scans)
+  Centre: (3.207, -0.886)
+  draw_filled_rect(draw, 3.130, -1.037, 3.284, -0.735)
+
+Candidate 6  (confidence HIGH — 64 points, 15 scans)
+  Centre: (4.898, 1.820)
+  draw_filled_rect(draw, 4.723, 1.482, 5.074, 2.159)
+
+Candidate 7  (confidence LOW — 19 points, 10 scans)
+  Centre: (1.802, -0.359)
+  draw_filled_rect(draw, 1.753, -0.567, 1.851, -0.150)
+
+Candidate 8  (confidence LOW — 16 points, 7 scans)
+  Centre: (3.591, 2.942)
+  draw_filled_rect(draw, 3.286, 2.822, 3.895, 3.061)
