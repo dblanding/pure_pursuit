@@ -160,6 +160,9 @@ def draw_fixed_features(draw):
     # Glass top table
     draw_filled_rect(draw, 0.85,  1.835,  1.105, 2.135)
 
+    # Temporary ottoman
+    # draw_filled_rect(draw, 0.312, 0.207, 1.168, 0.923)  # Centre: (0.740, 0.565)
+
     # ------------------------------------------------------------------
     # DINETTE
     # 8.13 + 0.1 m from south wall of office to north wall of house
@@ -197,11 +200,11 @@ def draw_fixed_features(draw):
 
     # Cabinets — north side
     draw_wall(draw,  0.965, 6.53,   0.965,  4.42)
-    draw_wall(draw,  0.965, 4.42,   1.705,  4.42)
-    draw_wall(draw,  1.705, 4.42,   1.705,  5.88)
-    draw_wall(draw,  1.705, 5.88,   3.755,  5.88)
-    draw_wall(draw,  3.755, 5.88,   3.755,  4.20)
-    draw_wall(draw,  3.755, 4.20,   4.415,  4.20)
+    draw_wall(draw,  0.965, 4.42,   1.515,  4.42)
+    draw_wall(draw,  1.515, 4.42,   1.515,  5.88)
+    draw_wall(draw,  1.515, 5.88,   3.765,  5.88)
+    draw_wall(draw,  3.765, 5.88,   3.765,  4.20)
+    draw_wall(draw,  3.765, 4.20,   4.415,  4.20)
 
     # Fridge
     draw_filled_rect(draw, 1.915, 2.715,  2.735,  3.315)
