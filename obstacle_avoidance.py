@@ -106,7 +106,7 @@ RECOVERY_CLEAR_CONFIRM = 4      # consecutive clears needed after recovery
 
 # Post-recovery corridor mode: after aligning with the gap, suppress VFH
 # steering for this many seconds so the robot can drive straight through.
-POST_RECOVERY_SEC = 3.0
+POST_RECOVERY_SEC = 2.0
 
 # During corridor mode, only obstacles within this narrow arc abort the run.
 # Side obstacles (gap walls) are ignored — alignment was already computed.
@@ -154,6 +154,7 @@ latest_goal = None
 last_cmd_t  = 0.0
 obstacle_t  = 0.0
 lock        = threading.Lock()
+_shutdown_requested = False
 
 
 # ---------------------------------------------------------------------------
@@ -472,6 +473,7 @@ def on_connect(client, userdata, flags, rc):
         client.subscribe(Topics.NAV_CMD_VEL)
         client.subscribe(Topics.POSE)
         client.subscribe(Topics.NAV_GOAL)
+        client.subscribe(Topics.NAV_SHUTDOWN)
         algo = "Potential Fields (APF)" if AVOIDANCE_MODE == "potential_fields" \
                else "Vector Field Histogram (VFH)"
         print(f"Connected. Algorithm: {algo}")
@@ -487,7 +489,12 @@ def on_connect(client, userdata, flags, rc):
 
 def on_message(client, userdata, msg):
     global latest_scan, latest_pose, latest_cmd, latest_goal, last_cmd_t
+    global _shutdown_requested
     try:
+        if msg.topic == Topics.NAV_SHUTDOWN:
+            print("\n🛑 Shutdown requested via NAV_SHUTDOWN — stopping.")
+            _shutdown_requested = True
+            return
         payload = json.loads(msg.payload.decode())
         with lock:
             if msg.topic == Topics.LIDAR_SCAN:
@@ -556,6 +563,9 @@ def run(broker, mode):
     try:
         while True:
             time.sleep(loop_dt)
+            if _shutdown_requested:
+                print("  Obstacle avoidance shutting down.")
+                break
             now = time.monotonic()
 
             with lock:
