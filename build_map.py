@@ -281,6 +281,12 @@ def draw_fixed_features(draw):
     # Grandfather clock
     draw_filled_rect(draw, 5.115, -3.71,   5.515, -3.46)
 
+    # Sofa (Candidate 1) Centre: (3.170, 0.427)
+    # draw_filled_rect(draw, 2.713, -0.766, 3.627, 1.621)
+
+    # High-back chair (Candidate 3) Centre: (5.020, -1.488)
+    # draw_filled_rect(draw, 4.585, -1.958, 5.455, -1.018)
+
     # ------------------------------------------------------------------
     # FOYER
     # ------------------------------------------------------------------

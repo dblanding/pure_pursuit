@@ -61,10 +61,12 @@ WF_SPEED        = 0.18    # m/s forward speed while following
 WF_TARGET_DIST  = 0.40    # m — desired standoff from wall
 WF_MAX_ANGULAR  = 1.0     # rad/s
 
-ANGLE_A         = 70.0    # degrees — front-leaning ray
-ANGLE_B         = 110.0   # degrees — rear-leaning ray
+ANGLE_A         = 70.0    # degrees — front-leaning ray (early corner detection)
+ANGLE_B         = 110.0   # degrees — rear-leaning ray (heading error paired with A)
+ANGLE_C         = 90.0    # degrees — directly abeam; sin(90°)=1 so d_C = exact
+                           # perpendicular distance; last to lose wall at corner
 RAY_WINDOW_DEG  = 10.0    # ± window for each ray sample
-SIN_ANGLE_A     = math.sin(math.radians(ANGLE_A))
+SIN_ANGLE_A     = math.sin(math.radians(ANGLE_A))  # for single-ray fallback only
 
 FRONT_ARC_DEG   = 30.0    # ± half-width of front danger arc
                            # Narrower than the old 40° to avoid false
@@ -86,10 +88,27 @@ KH              = 3.0     # heading-error gain (two-ray term)
 SMOOTH_WINDOW    = 4
 NONE_RESET_COUNT = 2
 
-CORNER_ARC_COOLDOWN    = 4.0    # s after arc completes before next can fire —
-                                # prevents cascading re-triggers while the robot
-                                # settles into wall-following on the new wall
-CORNER_ARC_MIN_RADIUS  = 0.25   # m — don't fire arc if d_perp is this small;
+CORNER_ARC_COOLDOWN    = 0.5    # s after arc completes before next can fire.
+POST_ARC_STRAIGHT_SEC  = 2.0    # s after arc: drive straight, no sweep.
+                                # After a 90° arc the new wall converges into
+                                # view naturally as the robot moves forward;
+                                # sweeping only adds unwanted extra rotation.
+ARC_TRIGGER_WINDOW     = 1.0    # s — wall_lost arc only fires if d_est was
+                                # below LOST_WALL_DIST within this window.
+                                # Prevents cascading fallback arcs when the
+                                # robot is genuinely lost (no wall seen for
+                                # several seconds after multiple arcs).
+                                # Previously 4s then 2s, but the ratio check
+                                # (RAY_RATIO_THRESHOLD) eliminated the cascade
+                                # that needed a long cooldown.  Now just long
+                                # enough to prevent same-scan re-triggers while
+                                # still allowing consecutive corners to be detected
+                                # almost immediately (0.5s = 0.09m travel).
+CORNER_ARC_MIN_RADIUS  = 0.25   # m — don't fire arc if d_perp is this small
+POST_ARC_STRAIGHT_SEC  = 1.5    # s — after arc, drive straight before sweeping;
+                                # gives the new wall time to appear in both rays
+                                # naturally rather than having the sweep push the
+                                # robot too close before it can stabilise
                                 # that reading is likely a close obstacle handled
                                 # by side-danger, not a valid corner radius
 
@@ -332,12 +351,16 @@ def follow_walls(client, side_name):
     corner_arc_until   = 0.0
     corner_arc_angular = 0.0   # computed per-corner from actual wall distance
     corner_arc_cooldown_until = 0.0   # no new arc until this time
+    post_arc_straight_until   = 0.0   # drive straight (no sweep) until this time
     was_corner_arcing  = False        # tracks arc → completion transition
+    last_close_wall_t  = 0.0         # last time d_est was below LOST_WALL_DIST
 
     d_a_buf           = deque(maxlen=SMOOTH_WINDOW)
     d_b_buf           = deque(maxlen=SMOOTH_WINDOW)
+    d_c_buf           = deque(maxlen=SMOOTH_WINDOW)   # 90° abeam ray
     consec_none_a     = 0
     consec_none_b     = 0
+    consec_none_c     = 0
 
     while True:
         time.sleep(0.05)
@@ -369,11 +392,14 @@ def follow_walls(client, side_name):
             continue
 
         if was_corner_arcing:
-            # Arc just finished — start cooldown before allowing another arc
+            # Arc just finished — start cooldown before allowing another arc,
+            # and drive straight briefly so the new wall converges into view
+            # without the sweep adding extra rotation.
             was_corner_arcing = False
             corner_arc_cooldown_until = now + CORNER_ARC_COOLDOWN
-            print(f"  ✓ Corner arc complete — PD control resumes "
-                  f"(cooldown {CORNER_ARC_COOLDOWN:.0f}s)")
+            post_arc_straight_until   = now + POST_ARC_STRAIGHT_SEC
+            print(f"  ✓ Corner arc complete — straight drive {POST_ARC_STRAIGHT_SEC:.0f}s "
+                  f"then PD (cooldown {CORNER_ARC_COOLDOWN:.1f}s)")
 
         # --- Corner-recovery arc: HIGHEST PRIORITY ---
         # Must be checked before ANYTHING else (side-danger, front-danger,
@@ -398,6 +424,7 @@ def follow_walls(client, side_name):
 
         d_a_raw = distance_at_angle(scan, side * ANGLE_A)
         d_b_raw = distance_at_angle(scan, side * ANGLE_B)
+        d_c_raw = distance_at_angle(scan, side * ANGLE_C)   # 90° abeam
 
         # Smooth each ray independently
         if d_a_raw is not None:
@@ -414,8 +441,16 @@ def follow_walls(client, side_name):
             if consec_none_b >= NONE_RESET_COUNT:
                 d_b_buf.clear()
 
+        if d_c_raw is not None:
+            d_c_buf.append(d_c_raw);  consec_none_c = 0
+        else:
+            consec_none_c += 1
+            if consec_none_c >= NONE_RESET_COUNT:
+                d_c_buf.clear()
+
         d_a = (sum(d_a_buf) / len(d_a_buf)) if d_a_buf else None
         d_b = (sum(d_b_buf) / len(d_b_buf)) if d_b_buf else None
+        d_c = (sum(d_c_buf) / len(d_c_buf)) if d_c_buf else None
 
         # --- Side-danger: obstacle too close on the followed side ---
         # The two rays distinguish WHERE the contact is:
@@ -458,33 +493,89 @@ def follow_walls(client, side_name):
             continue
 
         # Determine distance estimate and heading term.
-        # Full two-ray: use both rays — gives distance AND heading error.
-        # Single-ray fallback: if one ray drops out (e.g. oblique angle on
-        # bay window frames), estimate d_est from the surviving ray alone
-        # and suppress the heading-error term.  This avoids the rapid
-        # wall_lost/reacquire stutter that occurs when d_B intermittently
-        # returns None while d_A stays valid.
-        # Only declare wall_lost when BOTH rays are gone.
+        #
+        # d_C (90°, abeam): sin(90°)=1, so d_C is the exact perpendicular
+        # distance.  Use it as d_est whenever available — it's the most
+        # accurate reading and the last ray to lose the wall at an outside
+        # corner (the wall stays abeam until the robot's centre passes it).
+        #
+        # d_A (70°) and d_B (110°) are symmetric around 90°, so their
+        # difference is zero when parallel → heading_term = d_A - d_B.
+        #
+        # Ratio check: if d_A and d_B differ by more than RAY_RATIO_THRESHOLD×,
+        # one ray has lost the wall; use the closer one for heading.
+        RAY_RATIO_THRESHOLD = 2.0
+
+        # Heading term from symmetric 70°/110° pair
         if d_a is not None and d_b is not None:
-            d_est        = ((d_a + d_b) / 2.0) * SIN_ANGLE_A
-            heading_term = d_a - d_b
-            wall_lost    = d_est > LOST_WALL_DIST
-            single_ray   = False
+            ratio = d_b / d_a if d_a > 0 else float('inf')
+            if 1.0 / RAY_RATIO_THRESHOLD <= ratio <= RAY_RATIO_THRESHOLD:
+                heading_term = d_a - d_b
+                mode_ab = f"2ray ratio={ratio:.2f}"
+            elif ratio > RAY_RATIO_THRESHOLD:
+                heading_term = 0.0   # d_B unreliable
+                mode_ab = f"1ray(A) ratio={ratio:.2f}"
+            else:
+                heading_term = 0.0   # d_A unreliable
+                mode_ab = f"1ray(B) ratio={ratio:.2f}"
         elif d_a is not None:
-            d_est        = d_a * SIN_ANGLE_A
             heading_term = 0.0
-            wall_lost    = d_est > LOST_WALL_DIST
-            single_ray   = True
+            mode_ab = "A-only"
         elif d_b is not None:
-            d_est        = d_b * SIN_ANGLE_A
             heading_term = 0.0
-            wall_lost    = d_est > LOST_WALL_DIST
-            single_ray   = True
+            mode_ab = "B-only"
         else:
-            d_est        = None
             heading_term = 0.0
-            wall_lost    = True
-            single_ray   = False
+            mode_ab = "AB-none"
+
+        # d_est: prefer d_C (exact perpendicular) but ONLY when it's seeing a
+        # nearby wall (< LOST_WALL_DIST).  If d_C is far (seeing a distant
+        # feature across the room), fall back to the d_A/d_B ratio logic.
+        # A 2.77m d_C reading when d_B=0.59m is clearly the wrong wall.
+        if d_c is not None and d_c < LOST_WALL_DIST:
+            d_est     = d_c                    # sin(90°)=1, exact perpendicular
+            wall_lost = d_est > LOST_WALL_DIST # always False here, but for clarity
+            single_ray = (d_a is None and d_b is None)
+            mode_tag = f"C={d_c:.2f} {mode_ab}"
+        elif d_a is not None and d_b is not None:
+            ratio = d_b / d_a if d_a > 0 else float('inf')
+            if 1.0 / RAY_RATIO_THRESHOLD <= ratio <= RAY_RATIO_THRESHOLD:
+                d_est = ((d_a + d_b) / 2.0) * SIN_ANGLE_A
+                mode_tag = f"AB {mode_ab}"
+            elif ratio > RAY_RATIO_THRESHOLD:
+                d_est = d_a * SIN_ANGLE_A
+                mode_tag = f"A {mode_ab}"
+            else:
+                d_est = d_b * SIN_ANGLE_A
+                mode_tag = f"B {mode_ab}"
+            wall_lost  = d_est > LOST_WALL_DIST
+            single_ray = True
+        elif d_a is not None:
+            d_est      = d_a * SIN_ANGLE_A
+            wall_lost  = d_est > LOST_WALL_DIST
+            single_ray = True
+            mode_tag   = "A-only"
+        elif d_b is not None:
+            d_est      = d_b * SIN_ANGLE_A
+            wall_lost  = d_est > LOST_WALL_DIST
+            single_ray = True
+            mode_tag   = "B-only"
+        else:
+            d_est      = None
+            wall_lost  = True
+            single_ray = False
+            mode_tag   = "all-none"
+
+        # ── DIAGNOSTIC: print every scan when d_est is large or wall_lost ──
+        if wall_lost or (d_est is not None and d_est > WF_TARGET_DIST * 1.2):
+            print(f"  🔍 d_A={d_a if d_a is None else f'{d_a:.2f}'}  "
+                  f"d_C={d_c if d_c is None else f'{d_c:.2f}'}  "
+                  f"d_B={d_b if d_b is None else f'{d_b:.2f}'}  "
+                  f"d_est={d_est if d_est is None else f'{d_est:.2f}'}  "
+                  f"mode={mode_tag}  wall_lost={wall_lost}  "
+                  f"cooldown_ok={now>=corner_arc_cooldown_until}  "
+                  f"arc_ok={corner_arc_until<=now}  "
+                  f"recent_wall={now-last_close_wall_t:.1f}s")
 
         # --- Corner-recovery: reverse then pivot ---
         # When an outside corner end-face is detected (front blocked + wall
@@ -525,24 +616,42 @@ def follow_walls(client, side_name):
             # This is mathematically exact: after the arc the robot arrives
             # parallel to and at distance d from the new wall.
             # Prefer d_B for distance since d_A is unreliable at this point.
-            if (d_b is not None and
-                    d_b * SIN_ANGLE_A < WF_TARGET_DIST * 1.5 and
-                    d_b * SIN_ANGLE_A >= CORNER_ARC_MIN_RADIUS and
-                    corner_arc_until <= now and
-                    now >= corner_arc_cooldown_until):
-                sweeping = False   # cancel sweep — arc takes over
-                d_perp = d_b * SIN_ANGLE_A
-                d_perp = max(d_perp, WF_TARGET_DIST * 0.5)   # minimum radius
+            if (corner_arc_until <= now and
+                    now >= corner_arc_cooldown_until and
+                    now - last_close_wall_t < ARC_TRIGGER_WINDOW):
+                sweeping = False
+                # Prefer d_C (exact perpendicular) for arc radius, but only
+                # when it's actually seeing the nearby wall (< WF_TARGET_DIST*1.5).
+                # A far d_C reading (e.g. 2.77m) means the 90° ray is hitting
+                # a distant feature and should be ignored for radius calculation.
+                if d_c is not None and d_c < WF_TARGET_DIST * 1.5 and d_c >= CORNER_ARC_MIN_RADIUS:
+                    d_perp = d_c
+                else:
+                    d_perp_b = d_b * SIN_ANGLE_A if d_b is not None else None
+                    if d_perp_b is not None and CORNER_ARC_MIN_RADIUS <= d_perp_b < WF_TARGET_DIST * 1.5:
+                        d_perp = d_perp_b
+                    else:
+                        d_perp = WF_TARGET_DIST
                 corner_arc_angular = min(WF_SPEED / d_perp, WF_MAX_ANGULAR)
                 arc_duration = (math.pi / 2) / corner_arc_angular
                 corner_arc_until = now + arc_duration
                 print(f"  🔄 Outside corner: radius={d_perp:.2f}m  "
                       f"ω={corner_arc_angular:.2f}rad/s  "
                       f"duration={arc_duration:.1f}s")
-                continue   # top-of-loop will execute the arc immediately
+                continue
 
             # Fallback sweep: both rays lost or arc already attempted —
-            # hunt gently for the wall.
+            # hunt gently for the wall.  But first: if we just finished an
+            # arc, drive straight for POST_ARC_STRAIGHT_SEC so the new wall
+            # converges naturally without sweep rotation adding overshoot.
+            if now < post_arc_straight_until:
+                publish_motor(client, WF_SPEED, 0.0)
+                if now - last_status >= STATUS_INTERVAL:
+                    print(f"  ➡️  Post-arc straight "
+                          f"({post_arc_straight_until - now:.1f}s left, "
+                          f"d_C={'--' if d_c is None else f'{d_c:.2f}m'})")
+                    last_status = now
+                continue
             if not sweeping:
                 sweeping    = True
                 sweep_start = now
@@ -561,28 +670,71 @@ def follow_walls(client, side_name):
             if sweeping:
                 print(f"  ✅ Wall reacquired (d_est={d_est:.2f}m)")
             sweeping = False
+            # Track last time we had a confirmed close wall reading
+            if d_est is not None and d_est < LOST_WALL_DIST:
+                last_close_wall_t = now
 
         # --- Proactive outside corner detection ---
-        # When d_A (front ray) has just gone None while d_B (rear ray) still
-        # sees the wall at a normal distance, the front of the robot has
-        # passed the corner end — this is the earliest possible trigger for
-        # the geometric arc, before wall_lost fires and a sweep starts.
-        # Using d_B at this moment gives the most accurate arc radius.
-        if (single_ray and d_a is None and d_b is not None and
+        # Three paths to detect the corner before wall_lost/sweep:
+
+        # Path 1: d_A large while d_B still close (single-B mode)
+        # The ratio check guarantees d_A >> d_B; check d_A is absolutely
+        # large (> 2× expected) to confirm the front ray passed the corner.
+        _expected_d_a = WF_TARGET_DIST / SIN_ANGLE_A  # ≈ 0.43m at target
+        if (single_ray and
+                d_a is not None and d_a > _expected_d_a * 2.0 and
+                d_b is not None and
                 corner_arc_until <= now and
-                now >= corner_arc_cooldown_until and
-                d_est < WF_TARGET_DIST * 1.5 and
-                d_est >= CORNER_ARC_MIN_RADIUS):
-            d_perp = max(d_est, WF_TARGET_DIST * 0.5)
+                now >= corner_arc_cooldown_until):
+            d_perp_b = d_b * SIN_ANGLE_A
+            d_perp   = d_perp_b if d_perp_b >= CORNER_ARC_MIN_RADIUS else WF_TARGET_DIST
             corner_arc_angular = min(WF_SPEED / d_perp, WF_MAX_ANGULAR)
-            arc_duration = (math.pi / 2) / corner_arc_angular
-            corner_arc_until = now + arc_duration
+            arc_duration       = (math.pi / 2) / corner_arc_angular
+            corner_arc_until   = now + arc_duration
             sweeping = False
-            print(f"  🔄 Outside corner (early trigger): "
-                  f"radius={d_perp:.2f}m  "
-                  f"ω={corner_arc_angular:.2f}rad/s  "
+            print(f"  🔄 Outside corner (d_A={d_a:.2f}m large, d_B={d_b:.2f}m close): "
+                  f"radius={d_perp:.2f}m  ω={corner_arc_angular:.2f}rad/s  "
                   f"duration={arc_duration:.1f}s")
             continue
+
+        # Path 2: d_A just went None while d_C still sees the nearby wall
+        if (single_ray and d_a is None and
+                d_c is not None and d_c < LOST_WALL_DIST and
+                corner_arc_until <= now and
+                now >= corner_arc_cooldown_until):
+            d_perp_c = d_c   # sin(90°)=1, direct perpendicular distance
+            if d_perp_c >= CORNER_ARC_MIN_RADIUS:
+                corner_arc_angular = min(WF_SPEED / d_perp_c, WF_MAX_ANGULAR)
+                arc_duration = (math.pi / 2) / corner_arc_angular
+                corner_arc_until = now + arc_duration
+                sweeping = False
+                print(f"  🔄 Outside corner (early, d_C={d_c:.2f}m): "
+                      f"radius={d_perp_c:.2f}m  "
+                      f"ω={corner_arc_angular:.2f}rad/s  "
+                      f"duration={arc_duration:.1f}s")
+                continue
+
+        # Path 3: d_A None, d_B close (no d_C)
+        if (single_ray and d_a is None and d_b is not None and d_c is None and
+                corner_arc_until <= now and
+                now >= corner_arc_cooldown_until):
+            d_perp_b = d_b * SIN_ANGLE_A
+            if CORNER_ARC_MIN_RADIUS <= d_perp_b < WF_TARGET_DIST * 1.5:
+                d_perp = d_perp_b
+            elif d_perp_b >= WF_TARGET_DIST * 1.5:
+                d_perp = WF_TARGET_DIST
+            else:
+                d_perp = None
+            if d_perp is not None:
+                corner_arc_angular = min(WF_SPEED / d_perp, WF_MAX_ANGULAR)
+                arc_duration = (math.pi / 2) / corner_arc_angular
+                corner_arc_until = now + arc_duration
+                sweeping = False
+                print(f"  🔄 Outside corner (early, d_B fallback): "
+                      f"radius={d_perp:.2f}m  "
+                      f"ω={corner_arc_angular:.2f}rad/s  "
+                      f"duration={arc_duration:.1f}s")
+                continue
 
         # --- Normal following: two-ray heading + distance PD ---
         dist_error      = d_est - WF_TARGET_DIST
@@ -596,8 +748,9 @@ def follow_walls(client, side_name):
         publish_motor(client, WF_SPEED, angular)
 
         if now - last_status >= STATUS_INTERVAL:
-            ray_info = (f"d_A={d_a:.2f}m d_B={d_b:.2f}m" if not single_ray
+            ray_info = (f"d_A={d_a:.2f}m d_C={d_c if d_c is None else f'{d_c:.2f}m'} d_B={d_b:.2f}m" if not single_ray
                         else f"d_A={'--' if d_a is None else f'{d_a:.2f}m'} "
+                             f"d_C={'--' if d_c is None else f'{d_c:.2f}m'} "
                              f"d_B={'--' if d_b is None else f'{d_b:.2f}m'} "
                              f"[single-ray]")
             print(f"  ↔  d_est={d_est:.2f}m  err={dist_error:+.2f}m  "
