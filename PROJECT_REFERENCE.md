@@ -51,7 +51,6 @@ print(f"Connected to: {broker}")
 - Origin: `(-3.0, -7.0)` meters (from map_metadata.json)
 - Resolution: `0.05` m/pixel
 - Used by: path planner, localized pose
-- **Home position:** `(0.70, 3.25, 0.0)` - blue dot parking spot
  
 ### **Odom Frame** (Local)
 - Origin: Where robot was when odometry started
@@ -197,15 +196,14 @@ print(f"\r✅ Pose updated: ({x:.2f}, {y:.2f})", end='')
 - Pure pursuit path following
 - Map inflation for safety
 
-### **🚧 In Progress (Phase 1)**
-- Simple localization (odom → map transform)
-- Initial pose setting
-- **Migration:** ODOM_POSE → ODOM_RAW + POSE split
+### **✅ Working (Phase 1)**
+- ICP localization with pose correction (odom → map transform)
+- Dynamic obstacle avoidance (emergency braking)
+- OTOS sensor calibration/zeroing
 
-### **📋 Planned (Phase 2+)**
-- Particle filter localization with lidar
-- Landmark-based pose correction
-- Dynamic obstacle avoidance
+### **✅ Working  (Phase 2+)**
+- Unknown obstacle detection and reporting
+- Dynamic obstacle avoidance (steering through narrow channels)
 - Multi-goal mission planning
 ---
 
@@ -217,10 +215,6 @@ print(f"\r✅ Pose updated: ({x:.2f}, {y:.2f})", end='')
 
 ### **Active**
 - [ ] None currently
-
-### **Future Considerations**
-- Odometry drift over long distances (will be addressed by particle filter)
-- OTOS sensor calibration/zeroing procedure
 
 ---
 

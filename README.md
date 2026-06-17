@@ -95,10 +95,10 @@
                     └────────────────┘
 ```
 * These files will each play a part in the process of moving from start to goal:
-    * *robot_navigator.py* high-level mission controller
-    * *path_planner.py* plans a route around any obstacles from start to goal -> delivers the waypoints
+    * *robot_navigator.py* high-level mission controller (Not yet implemented)
+    * *path_planner.py* plans a route around any obstacles from start to goal -> saves the waypoints to file *planned_path.json*
     * *path_follower.py* converts waypoints into velocity commands
-    * *motor_control.py* runs (as a service) on Raspberry Pi - receives waypoints and sends commands (lin_vel, ang_vel) via serial bus to Pico.
+    * *motor_control.py* runs (as a service) on Raspberry Pi - receives velocity commands (lin_vel, ang_vel) and relays to Pico via serial bus.
         * Pico receives commands from 2 sources and must decide between them:
             1. joystick commands (teleop) - higher priority
             2. motor_control (autonomous) - when joystick is switched off
@@ -107,7 +107,7 @@
 * The convenience function, **interactive_goal_selector.py** is a *front-end* for path_planner.py that makes it easy to pick valid start/goal points by clicking on a map. Run it with `uv run interactive_goal_selector.py`
 * Here's how it works:
     1. Window opens showing your map (green = safe, black = obstacles)
-    2. Click on green area → Sets start point (blue circle)
+    2. Click on green area → Sets first waypoint (blue circle)
     3. Click another green area → Sets goal point (red circle) and automatically plans path
     4. Path is displayed as a cyan line in file `path_visualization.png`
         * The waypoints (along the path) are saved to the file `planned_path.json`
@@ -120,7 +120,7 @@
 
 1. Park the robot in its Home position and turn it on.
 2. Start the odometer service on the robot
-3. Start the motor_control service on the robot. (N/A: changed to auto-start)
+3. The motor_control service on the robot is already running.
 4. Run path follower on the laptop: `uv run path_follower.py`
 
 ## Interactive Waypoint Selector
@@ -128,7 +128,7 @@
 * When the robot drives along the path from start to finish, the A* algorithm hugs along any obstacles along the way. If you were driving a car through a narrow alley or tight spot, wouldn't you prefer a path half way between obstacles on the right and those on the left?
 * The **interactive_wp_selector.py** program makes it possible to do this. It also addresses a couple of other issues as well.
     * The map display is much larger (with a size that is easy to set).
-    * The path is no longer limited to just 2 points (start and goal), but can be defined by an unlimited number of points.
+    * The path is no longer limited to just 2 points (start and goal), but can be defined by any number of points.
 * Here's how it works:
     1. Click a first point 
     2. Click a sequence of additional points defining the desired path
@@ -166,7 +166,7 @@ Adding the icp_localizer node requires a change in the previous flow of mqtt mes
 
 odometer → (Topics.ODOM_POSE) → icp_localizer → (Topics.POSE) → path_follower
 
-## Making a tyupical run
+## Making a typical run
 
 0. Use interactive_wp_selector to plan a path
 
@@ -201,3 +201,30 @@ Just steering along a path consisting of a series of pre-selected waypoints does
 ![VFH Visualizer](imgs/VFH-visualizer.png)
 
 In the figure above, the polar plot on the left is like a bird's-eye view of a robot proceeding along its local X-axis about to enter a narrow gap which is barely wide enough to allow it through. Driving a path straight to goal would not be successful. To get through the gap, the path_follower needs to temporarily relinquish steering control to the obstacle_avoider, until it gets through the gap. The algorithm is pretty simple: At the entrance, steer in place to align the robot with the center of the open channel, then proceed through the gap with zero steering. Upon exit, return control to the path_follower.
+
+## Phase 2: Unmapped obstacle detection and logging
+
+Teaching the robot to notice things that aren't in its survey map and report them in a form that can be added to build_map.py
+
+Here's the concept. Every time the ICP localizer runs, it matches scan points against the known map. Points that match are the walls and fixed furniture on the survey map. But some points don't match — they land in empty space on the map. Right now those unmatched points are just ignored. In Phase 2, we collect them.
+
+The pipeline would look like this:
+* Collect — a new node *detect_obstacles.py* subscribes to Topics.LIDAR_SCAN and Topics.POSE. For each scan it transforms points to map coordinates and checks each one against survey_map.png. Points that fall in empty map pixels are "unmatched" — potential unknown obstacles.
+* Filter — single unmatched points are usually noise (people walking through, scan artifacts). A point only becomes interesting if it appears consistently across multiple scans from different robot positions. This uses DBSCAN clustering — a standard algorithm in scikit-learn that groups nearby points into clusters and discards isolated outliers.
+* Report — clusters that persist across enough scans get a bounding box fitted to them. The output is candidate draw_filled_rect() calls that can be pasted into build_map.py, with coordinates in the existing map frame.  Review them, decide which ones represent real furniture worth adding, and update the map.
+
+### Workflow
+
+1. Identify an area where an object of interest is located
+2. Plan a waypoint loop around the object using interactive_wp_selector.py
+3. Run the nodes below in the order shown:
+    1. icp_localizer.py
+    2. detect_obstacles.py
+    3. obstacle_avoidance.py
+    4. path_follower.py
+4. Review the output of detect_obstacles and add object(s) to build_map.py
+5. Run build_map.py to generate new maps
+
+## Phase 3: Exploring Beyond the Known Map (Not yet implemented)
+
+A "frontier" is the boundary between known free space and unknown space in an occupancy grid. The robot identifies frontiers, navigates to the nearest or most informative one, and maps as it goes. The [Pose-Graph SLAM](https://github.com/dblanding/pose-graph-SLAM) system demonstrated the ability to build maps while teleoperating the robot  — frontier exploration would drive that process autonomously.
